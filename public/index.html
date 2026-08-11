@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=0.75">
+<title>Verification System</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Segoe UI,Arial,sans-serif}
+body{height:100vh;width:100%;background:linear-gradient(to bottom,#141130,#000000);display:flex;justify-content:center;align-items:center;text-align:center;transform:scale(0.75);transform-origin:top left;width:133.33%;height:133.33%;overflow:auto}
+.page{display:none;width:100%;height:100vh;justify-content:center;align-items:center}
+.page.active{display:flex}
+.top-card{width:100%;height:9%;background-color:#151422;border-bottom:1px solid #2f2c4a;position:fixed;top:0;left:0;right:0;display:flex;align-items:center;padding:0 20px;z-index:1000}
+.top-bar{width:100%;display:flex;justify-content:space-between;align-items:center}
+.profile-left{display:flex;align-items:center;gap:12px}
+.profile-left img{width:45px;height:45px;border-radius:50%;object-fit:cover;background:#222}
+.user-info{display:flex;flex-direction:column;font-size:13px;text-align:left;color:white}
+.status{display:flex;align-items:center;gap:8px;padding:6px 18px;border-radius:50px;font-size:13px;font-weight:600;letter-spacing:1px}
+.status::before{content:"";width:7px;height:7px;border-radius:50%}
+@keyframes softBlink{0%{opacity:1}50%{opacity:0.3}100%{opacity:1}}
+#page1 .status{background:#171D3D;border:1px solid #333A54;color:#86A3D8}
+#page1 .status::before{background:#2C62C8;animation:softBlink 2.5s infinite ease-in-out}
+#page1 .containerr{margin-top:160px;width:80%;display:flex;justify-content:center;align-items:center}
+#page1 .cardd{width:900px;height:450px;background:linear-gradient(to bottom,#18162B,#000000);border-radius:30px;box-shadow:0 4px 20px rgba(0,0,0,0.6);display:flex;border:1px solid #29273C;justify-content:center;align-items:center}
+#page1 .container{width:400px;height:380px;display:flex;flex-direction:column;align-items:center}
+#page1 .scanner-wrapper{margin-bottom:40px}
+#page1 .outer-circle{position:relative;width:140px;height:140px;border-radius:50%;border:5px solid #455F97;display:flex;justify-content:center;align-items:center;box-shadow:0 0 25px rgba(42,70,128,0.6);overflow:hidden}
+#page1 .outer-rotation{position:absolute;width:100%;height:100%;border-radius:50%;animation:rotateClockwise 6s linear infinite}
+#page1 .outer-dot{position:absolute;width:5px;height:7px;background:#2A4680;border-radius:50%}
+#page1 .outer-dot:nth-child(1){top:-5px;left:50%;transform:translateX(-50%)}
+#page1 .outer-dot:nth-child(2){top:50%;right:-5px;transform:translateY(-50%)}
+#page1 .outer-dot:nth-child(3){bottom:-5px;left:50%;transform:translateX(-50%)}
+#page1 .outer-dot:nth-child(4){top:50%;left:-5px;transform:translateY(-50%)}
+#page1 .inner-circle{position:relative;width:120px;height:120px;border-radius:50%;border:4px solid #344779;box-shadow:0 0 20px rgba(42,70,128,0.4) inset;display:flex;justify-content:center;align-items:center}
+#page1 .inner-rotation{position:absolute;width:100%;height:100%;border-radius:50%;animation:rotateCounter 6s linear infinite}
+#page1 .inner-dot{position:absolute;width:5px;height:5px;background:#344779;border-radius:50%}
+#page1 .inner-dot:nth-child(1){top:-4px;left:50%;transform:translateX(-50%)}
+#page1 .inner-dot:nth-child(2){top:50%;right:-4px;transform:translateY(-50%)}
+#page1 .inner-dot:nth-child(3){bottom:-4px;left:50%;transform:translateX(-50%)}
+#page1 .inner-dot:nth-child(4){top:50%;left:-4px;transform:translateY(-50%)}
+#page1 .scan-image{width:60px;height:60px;border-radius:15px;z-index:2}
+#page1 .scan{position:absolute;width:100%;height:180px;top:-180px;background:linear-gradient(to bottom,transparent 0%,rgba(42,70,128,0.6) 35%,rgba(42,70,128,1) 50%,rgba(42,70,128,0.6) 65%,transparent 100%);mix-blend-mode:screen;filter:blur(15px);animation:scanMove 2s linear infinite;z-index:5;pointer-events:none}
+@keyframes scanMove{0%{top:-180px}100%{top:100%}}
+@keyframes rotateClockwise{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes rotateCounter{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+#page1 h1{font-size:170%;font-weight:600;margin-bottom:20px;color:#fff}
+#page1 .subtitle{font-size:100%;color:#bfbfbf;margin-bottom:60px}
+#page1 .progress-container{width:85%;background:#444;height:5px;border-radius:5px;overflow:hidden}
+#page1 .progress-bar{height:100%;width:10%;background:#4080EC;transition:width 1s ease}
+#page1 .progress-text{display:flex;justify-content:space-between;width:85%;margin-top:3%;font-size:70%;color:#5B7ECC}
+#page2 .status{background:#162429;border:1px solid #2E4344;color:#6AC67F}
+#page2 .status::before{background:#1EC764;animation:softBlink 2.5s infinite ease-in-out}
+#page2 .containerr{margin-top:160px;width:100%;display:flex;justify-content:center;align-items:center}
+#page2 .cardd{width:500px;height:600px;background:linear-gradient(to bottom,#1A1830,#060606);border-radius:30px;box-shadow:0 4px 20px rgba(0,0,0,0.6);display:flex;border:1px solid #1F1E26;justify-content:center;align-items:center}
+#page2 .container{width:500px;display:flex;flex-direction:column;align-items:center}
+#page2 .verify-wrapper{position:relative;width:260px;height:260px;margin-bottom:50px}
+#page2 .verify-wrapper svg,#page2 .glow-layer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+#page2 .outermost{width:235px;height:235px}
+#page2 .outer{width:200px;height:200px}
+#page2 .inner{width:95px;height:95px}
+#page2 .glow-layer{width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,rgba(6,247,156,0.6) 0%,rgba(6,247,156,0.45) 20%,rgba(6,247,156,0.25) 40%,rgba(6,247,156,0.08) 60%,transparent 85%);z-index:0}
+#page2 h1{font-size:200%;font-weight:600;color:#0CFBA4;margin-bottom:15px}
+#page2 .subtitle{font-size:15px;color:#8F8F99;margin-bottom:10px}
+#page3 .status{background:#2A1414;border:1px solid #5A1F1F;color:#FF5C5C}
+#page3 .status::before{background:#FF3B3B;animation:softBlink 2.5s infinite ease-in-out}
+#page3 .containerr{margin-top:120px;width:100%;display:flex;justify-content:center;align-items:center}
+#page3 .container{width:100%;display:flex;flex-direction:column;align-items:center}
+#page3 .verify-wrapper{position:relative;width:260px;height:260px;margin-bottom:50px}
+#page3 .verify-wrapper svg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+#page3 .outermost{width:185px;height:185px}
+#page3 .outer{width:165px;height:165px}
+#page3 .inner{width:80px;height:80px}
+#page3 .blur-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:55px;height:55px;background:#ff2b2b;border-radius:50%;filter:blur(30px);opacity:0.9}
+#page3 h1{font-size:200%;font-weight:600;color:#FF4D4D;margin-bottom:10px}
+#page3 .subtitle{font-size:15px;color:#8F8F99;margin-bottom:10px}
+#page4 .status{background:#182426;border:1px solid #314444;color:#1DC562}
+#page4 .status::before{background:#1DC562;animation:softBlink 2.5s infinite ease-in-out}
+#page4 .containerr{margin-top:100px;width:100%;display:flex;justify-content:center;align-items:center}
+#page4 .cardd{width:500px;height:550px;background:linear-gradient(to bottom,#1A1830,#060606);border-radius:30px;box-shadow:0 4px 30px rgba(0,0,0,0.7);border:1px solid #1F1E26;display:flex;justify-content:center;align-items:center}
+#page4 .container{width:500px;display:flex;flex-direction:column;align-items:center}
+#page4 .verify-wrapper{position:relative;width:260px;height:260px;margin-bottom:50px}
+#page4 .verify-wrapper svg,#page4 .glow-layer,#page4 .center-image{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+#page4 .outermost{width:205px;height:205px}
+#page4 .outer{width:180px;height:180px}
+#page4 .glow-layer{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;height:70px;background:#4882DC;border-radius:50%;filter:blur(30px);opacity:0.9}
+#page4 .center-image{width:85px;height:85px;object-fit:contain;z-index:5;pointer-events:none}
+#page4 h1{font-size:200%;font-weight:600;color:#5F9FF0;margin-bottom:15px}
+#page4 .subtitle{font-size:15px;color:#9699A2;margin-bottom:10px}
+.bot-button{border:none;letter-spacing:2px;font-size:16px;width:350px;height:70px;font-weight:bold;cursor:pointer;border-radius:12px;text-transform:uppercase;transition:0.3s ease}
+.bot-button:hover{transform:scale(1.05)}
+#page2 .bot-button{background-color:#00FFA3;color:#010A00;box-shadow:0 0 10px #00FFA3;margin-top:40px}
+#page3 .bot-button{background-color:#FF4D4D;color:#FFFFFF;box-shadow:0 0 15px rgba(255,0,0,0.6);margin-top:40px}
+#page4 .bot-button{background:#3B82F6;color:#F5FEFF;box-shadow:0 0 40px rgba(58,141,255,0.4);margin-top:40px;height:65px}
+.nav-buttons{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:9999;background:rgba(0,0,0,0.7);padding:10px 20px;border-radius:50px;backdrop-filter:blur(10px)}
+.nav-btn{padding:8px 16px;border:none;border-radius:20px;cursor:pointer;font-weight:bold;font-size:12px;transition:0.3s;color:#fff}
+.nav-btn:hover{transform:scale(1.1)}
+.nav-btn.active-btn{border:2px solid #fff}
+#nav1{background:#2C62C8}
+#nav2{background:#00FFA3;color:#000}
+#nav3{background:#FF4D4D}
+#nav4{background:#3B82F6}
+.url-params{position:fixed;top:80px;right:10px;background:rgba(0,0,0,0.8);color:#0f0;padding:10px;border-radius:8px;font-size:10px;max-width:300px;max-height:200px;overflow:auto;text-align:left;z-index:9998;border:1px solid #00ff00;display:none}
+.url-params.show{display:block}
+.url-params strong{color:#fff}
+.toggle-params{position:fixed;top:80px;right:10px;z-index:9999;background:#2C62C8;color:#fff;border:none;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:10px}
+</style>
+</head>
+<body>
+
+<div class="top-card">
+    <div class="top-bar">
+        <div class="profile-left">
+            <img id="profilePic" src="">
+            <div class="user-info">
+                <strong id="profileName">User</strong>
+                <small id="profileId">ID: 12345</small>
+            </div>
+        </div>
+        <div class="status" id="statusText">SCANNING</div>
+    </div>
+</div>
+
+<button class="toggle-params" onclick="toggleParams()">📊 Params</button>
+<div class="url-params" id="urlParams"></div>
+
+<div class="page active" id="page1">
+    <div class="containerr">
+        <div class="cardd">
+            <div class="container">
+                <div class="scanner-wrapper">
+                    <div class="outer-circle">
+                        <div class="outer-rotation">
+                            <div class="outer-dot"></div>
+                            <div class="outer-dot"></div>
+                            <div class="outer-dot"></div>
+                            <div class="outer-dot"></div>
+                        </div>
+                        <div class="inner-circle">
+                            <div class="inner-rotation">
+                                <div class="inner-dot"></div>
+                                <div class="inner-dot"></div>
+                                <div class="inner-dot"></div>
+                                <div class="inner-dot"></div>
+                            </div>
+                            <img src="https://i.ibb.co/20z9rTwJ/20260227-005438.png" class="scan-image">
+                        </div>
+                        <div class="scan"></div>
+                    </div>
+                </div>
+                <h1>Verifying Device</h1>
+                <div class="subtitle" id="statusText1">Establishing secure handshake...</div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text">
+                    <span>ANALYSIS IN PROGRESS</span>
+                    <span id="percent">10%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page" id="page2">
+    <div class="containerr">
+        <div class="cardd">
+            <div class="container">
+                <div class="verify-wrapper">
+                    <svg class="outermost" viewBox="0 0 400 400">
+                        <circle cx="200" cy="200" r="180" fill="none" stroke="#3ED9A7" stroke-width="6"/>
+                    </svg>
+                    <svg class="outer" viewBox="0 0 400 400">
+                        <circle cx="200" cy="200" r="180" fill="none" stroke="#297E6C" stroke-width="8"/>
+                    </svg>
+                    <div class="glow-layer"></div>
+                    <svg class="inner" viewBox="0 0 400 400">
+                        <circle cx="200" cy="200" r="155" fill="#1E5652" stroke="#06F79C" stroke-width="45"/>
+                        <path d="M155 205 Q170 225 190 245 Q220 210 260 170" fill="none" stroke="#07FFA8" stroke-width="35" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h1><b>Verified Successfully</b></h1>
+                <div class="subtitle">You're Verified Successfully, you can use <br> our bot now.</div>
+                <button class="bot-button" onclick="goToPage(4)">CONTINUE TO BOT</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page" id="page3">
+    <div class="containerr">
+        <div class="container">
+            <div class="verify-wrapper">
+                <svg class="outermost" viewBox="0 0 400 400">
+                    <circle cx="200" cy="200" r="180" fill="none" stroke="#FF4D4D" stroke-width="6"/>
+                </svg>
+                <svg class="outer" viewBox="0 0 400 400">
+                    <circle cx="200" cy="200" r="180" fill="none" stroke="#B33939" stroke-width="4"/>
+                </svg>
+                <div class="blur-dot"></div>
+                <svg class="inner" viewBox="0 0 100 100">
+                    <path d="M50 12 L88 80 Q90 84 84 86 L16 86 Q10 84 12 80 Z" fill="none" stroke="#FF4D4D" stroke-width="8" stroke-linejoin="round"/>
+                    <line x1="50" y1="40" x2="50" y2="60" stroke="#FF4D4D" stroke-width="8" stroke-linecap="round"/>
+                    <circle cx="50" cy="74" r="5" fill="#FF4D4D"/>
+                </svg>
+            </div>
+            <h1><b>Verification Failed</b></h1>
+            <div class="subtitle">You can still continue to our Bot.</div>
+            <button class="bot-button" onclick="goToPage(4)">CONTINUE TO BOT</button>
+        </div>
+    </div>
+</div>
+
+<div class="page" id="page4">
+    <div class="containerr">
+        <div class="cardd">
+            <div class="container">
+                <div class="verify-wrapper">
+                    <svg class="outermost" viewBox="0 0 400 400">
+                        <circle cx="200" cy="200" r="180" fill="none" stroke="#4882DC" stroke-width="3"/>
+                    </svg>
+                    <svg class="outer" viewBox="0 0 400 400">
+                        <circle cx="200" cy="200" r="180" fill="none" stroke="#3D4D80" stroke-width="5"/>
+                    </svg>
+                    <div class="glow-layer"></div>
+                    <img class="center-image" src="https://i.ibb.co/r2qC01gR/20260228-183405.png">
+                </div>
+                <h1><b>Already Verified</b></h1>
+                <div class="subtitle">You're checked you can continue to bot.</div>
+                <button class="bot-button" onclick="alert('Redirecting to bot...')">CONTINUE TO BOT</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="nav-buttons">
+    <button class="nav-btn active-btn" id="nav1" onclick="goToPage(1)">Scan</button>
+    <button class="nav-btn" id="nav2" onclick="goToPage(2)">✅</button>
+    <button class="nav-btn" id="nav3" onclick="goToPage(3)">❌</button>
+    <button class="nav-btn" id="nav4" onclick="goToPage(4)">✓</button>
+</div>
+
+<script>
+function getUrlParams(){
+    const params={};
+    const url=window.location.href;
+    const hashMatch=url.match(/#tgWebAppData=([^&]*)/);
+    if(hashMatch) params.tgWebAppData=decodeURIComponent(hashMatch[1]);
+    const urlObj=new URL(url);
+    urlObj.searchParams.forEach((value,key)=>{params[key]=value;});
+    const botHashMatch=url.match(/[?&]botHash=([^&]*)/);
+    if(botHashMatch) params.botHash=botHashMatch[1];
+    const botMatch=url.match(/[?&]bot=([^&]*)/);
+    if(botMatch) params.bot=botMatch[1];
+    const tgWebAppVersionMatch=url.match(/[?&]tgWebAppVersion=([^&]*)/);
+    if(tgWebAppVersionMatch) params.tgWebAppVersion=tgWebAppVersionMatch[1];
+    const tgWebAppPlatformMatch=url.match(/[?&]tgWebAppPlatform=([^&]*)/);
+    if(tgWebAppPlatformMatch) params.tgWebAppPlatform=tgWebAppPlatformMatch[1];
+    const tgWebAppThemeParamsMatch=url.match(/[?&]tgWebAppThemeParams=([^&]*)/);
+    if(tgWebAppThemeParamsMatch) params.tgWebAppThemeParams=decodeURIComponent(tgWebAppThemeParamsMatch[1]);
+    return params;
+}
+
+function displayUrlParams(){
+    const params=getUrlParams();
+    const container=document.getElementById('urlParams');
+    let html='<strong>📋 URL Parameters:</strong><br><br>';
+    if(Object.keys(params).length===0){
+        html+='No parameters found';
+    }else{
+        for(const [key,value] of Object.entries(params)){
+            html+=`<strong>${key}:</strong> ${value.substring(0,100)}${value.length>100?'...':''}<br>`;
+        }
+    }
+    container.innerHTML=html;
+}
+
+let paramsVisible=false;
+function toggleParams(){
+    paramsVisible=!paramsVisible;
+    const container=document.getElementById('urlParams');
+    if(paramsVisible){
+        container.classList.add('show');
+        displayUrlParams();
+    }else{
+        container.classList.remove('show');
+    }
+}
+
+const tg=window.Telegram.WebApp;
+tg.expand();
+const urlParams=getUrlParams();
+let user=null;
+if(tg.initDataUnsafe?.user){
+    user=tg.initDataUnsafe.user;
+}else if(urlParams.tgWebAppData){
+    try{
+        const dataParams=new URLSearchParams(urlParams.tgWebAppData);
+        const userJson=dataParams.get('user');
+        if(userJson) user=JSON.parse(decodeURIComponent(userJson));
+    }catch(e){console.log('Error parsing user data:',e);}
+}
+if(user){
+    document.getElementById("profileName").innerText=user.first_name+(user.last_name?" "+user.last_name:"");
+    document.getElementById("profileId").innerText="ID: "+user.id;
+    if(user.photo_url) document.getElementById("profilePic").src=user.photo_url;
+}
+console.log('📊 URL Parameters:',urlParams);
+console.log('👤 User Data:',user);
+
+function goToPage(pageNum){
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const targetPage=document.getElementById('page'+pageNum);
+    if(targetPage) targetPage.classList.add('active');
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active-btn'));
+    const navBtn=document.getElementById('nav'+pageNum);
+    if(navBtn) navBtn.classList.add('active-btn');
+    const statusMap={1:'SCANNING',2:'VERIFIED',3:'FAILED',4:'ACTIVE'};
+    document.getElementById('statusText').innerText=statusMap[pageNum]||'ACTIVE';
+}
+
+let bar=document.getElementById("progressBar");
+let percent=document.getElementById("percent");
+let statusText1=document.getElementById("statusText1");
+let steps=[
+    {value:10,text:"Establishing secure handshake..."},
+    {value:60,text:"Analyzing device integrity..."},
+    {value:90,text:"Final security checks..."},
+    {value:100,text:"Verification Complete"}
+];
+let index=0;
+function updateProgress(){
+    if(index<steps.length){
+        let step=steps[index];
+        bar.style.width=step.value+"%";
+        percent.innerHTML=step.value+"%";
+        statusText1.innerHTML=step.text;
+        index++;
+        setTimeout(updateProgress,1500);
+    }else{
+        setTimeout(()=>{goToPage(2);},500);
+    }
+}
+updateProgress();
+console.log('✅ Verification System Loaded');
+console.log('🔗 URL Structure: https://[domain]/[path]?botHash=[bot_hash]&bot=[bot_username]#tgWebAppData=...');
+
+// Token Manager
+class TokenManager {
+    constructor() {
+        this.token = localStorage.getItem('jwtToken');
+    }
+    
+    setToken(token) {
+        this.token = token;
+        localStorage.setItem('jwtToken', token);
+    }
+    
+    getAuthHeader() {
+        return this.token ? `Bearer ${this.token}` : null;
+    }
+    
+    clearToken() {
+        this.token = null;
+        localStorage.removeItem('jwtToken');
+    }
+    
+    isTokenValid() {
+        if (!this.token) return false;
+        try {
+            const payload = JSON.parse(atob(this.token.split('.')[1]));
+            const now = Math.floor(Date.now() / 1000);
+            return payload.exp > now;
+        } catch (error) {
+            return false;
+        }
+    }
+}
+
+const tokenManager = new TokenManager();
+
+// API Functions
+async function initVerification(initData, botHash, bot) {
+    try {
+        const response = await fetch('/api/init-verification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, botHash, bot })
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Init verification error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function checkStatus(sessionId) {
+    try {
+        const response = await fetch(`/api/check-status/${sessionId}`, {
+            headers: { 'Authorization': tokenManager.getAuthHeader() }
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Check status error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function checkExistingVerification() {
+    if (!tokenManager.isTokenValid()) {
+        tokenManager.clearToken();
+        return false;
+    }
+    
+    try {
+        const response = await fetch('/api/user-profile', {
+            headers: { 'Authorization': tokenManager.getAuthHeader() }
+        });
+        const data = await response.json();
+        if (data.success && data.isVerified) {
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Check verification error:', error);
+        return false;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const isVerified = await checkExistingVerification();
+    if (isVerified) {
+        goToPage(4);
+        return;
+    }
+    
+    const urlParams = getUrlParams();
+    if (urlParams.tgWebAppData) {
+        const result = await initVerification(
+            urlParams.tgWebAppData,
+            urlParams.botHash || null,
+            urlParams.bot || null
+        );
+        
+        if (result.success && result.status === 'already_verified') {
+            if (result.token) tokenManager.setToken(result.token);
+            goToPage(4);
+        } else if (result.success && result.sessionId) {
+            if (result.token) tokenManager.setToken(result.token);
+            const interval = setInterval(async () => {
+                const status = await checkStatus(result.sessionId);
+                if (status.status === 'verified') {
+                    goToPage(2);
+                    clearInterval(interval);
+                } else if (status.status === 'failed') {
+                    goToPage(3);
+                    clearInterval(interval);
+                }
+            }, 2000);
+        }
+    }
+});
+</script>
+</body>
+</html>
