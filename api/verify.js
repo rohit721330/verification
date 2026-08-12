@@ -21,6 +21,13 @@ const userBrowserHistory = new Map();
 const vpnBlocklist = new Set();
 const rateLimiter = new Map();
 
+// Store bot info from URL params
+let botInfo = {
+    token: null,
+    username: null,
+    hash: null
+};
+
 function generateToken(userData, expiresIn = JWT_VERIFICATION_EXPIRY) {
     return jwt.sign(
         {
@@ -191,9 +198,10 @@ function checkRateLimit(userId, maxAttempts = 3, windowMs = 300000) {
 
 async function sendTelegramMessage(userId, message) {
     try {
-        const BOT_TOKEN = process.env.BOT_TOKEN;
-        if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_BOT_TOKEN') {
-            console.log('Bot token not configured.');
+        // Use bot token from URL params
+        const BOT_TOKEN = botInfo.token;
+        if (!BOT_TOKEN) {
+            console.log('Bot token not found in URL params.');
             return;
         }
         
@@ -244,15 +252,50 @@ async function startVerificationProcess(sessionId, userId) {
     }
 }
 
+// ==================== MIDDLEWARE: Extract Bot Info from URL ====================
+
+app.use((req, res, next) => {
+    // Extract bot info from query parameters
+    const query = req.query || {};
+    
+    if (query.botToken) {
+        botInfo.token = query.botToken;
+    }
+    if (query.bot) {
+        botInfo.username = query.bot;
+    }
+    if (query.botHash) {
+        botInfo.hash = query.botHash;
+    }
+    
+    // Also check from body if present
+    if (req.body && req.body.botToken) {
+        botInfo.token = req.body.botToken;
+    }
+    if (req.body && req.body.bot) {
+        botInfo.username = req.body.bot;
+    }
+    if (req.body && req.body.botHash) {
+        botInfo.hash = req.body.botHash;
+    }
+    
+    next();
+});
+
 // ==================== API ROUTES ====================
 
 // 1. Init Verification
 app.post('/init-verification', async (req, res) => {
     try {
-        const { initData, botHash, bot } = req.body;
+        const { initData, botHash, bot, botToken } = req.body;
         const deviceFingerprint = generateDeviceFingerprint(req);
         const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '';
         const browserInfo = getBrowserInfo(req);
+        
+        // Store bot info from request
+        if (botToken) botInfo.token = botToken;
+        if (bot) botInfo.username = bot;
+        if (botHash) botInfo.hash = botHash;
         
         const isVPN = await detectVPN(ip);
         if (isVPN) {
@@ -270,8 +313,17 @@ app.post('/init-verification', async (req, res) => {
             });
         }
         
-        const botToken = process.env.BOT_TOKEN;
-        const isValid = verifyTelegramHash(initData, botToken);
+        // Use bot token from URL params
+        const botTokenToUse = botInfo.token || process.env.BOT_TOKEN;
+        if (!botTokenToUse) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_BOT_TOKEN',
+                message: 'Bot token not found in URL parameters'
+            });
+        }
+        
+        const isValid = verifyTelegramHash(initData, botTokenToUse);
         if (!isValid) {
             return res.status(403).json({
                 success: false,
@@ -364,8 +416,8 @@ app.post('/init-verification', async (req, res) => {
             lastName: user.last_name || '',
             status: 'pending',
             createdAt: Date.now(),
-            bot: bot || process.env.BOT_USERNAME,
-            botHash: botHash || null,
+            bot: bot || botInfo.username || '',
+            botHash: botHash || botInfo.hash || null,
             deviceFingerprint: deviceFingerprint,
             browser: browserInfo.browser,
             os: browserInfo.os,
@@ -762,9 +814,11 @@ app.post('/webhook', async (req, res) => {
         console.log('   Device:', deviceInfo);
         console.log('   Timestamp:', timestamp || new Date().toISOString());
         
-        // Forward to Telegram bot
-        if (process.env.BOT_TOKEN) {
+        // Forward to Telegram bot using token from URL params
+        if (botInfo.token) {
             await sendWebhookToBot(userId, status, title, message, errorType);
+        } else {
+            console.log('⚠️ No bot token available for webhook forwarding');
         }
         
         res.json({
@@ -786,7 +840,7 @@ app.post('/webhook', async (req, res) => {
 // ===== SEND WEBHOOK TO TELEGRAM BOT =====
 async function sendWebhookToBot(userId, status, title, message, errorType) {
     try {
-        const botToken = process.env.BOT_TOKEN;
+        const botToken = botInfo.token;
         if (!botToken) return;
         
         const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
@@ -823,5 +877,17 @@ ${errorType ? `<b>Error Type:</b> <code>${errorType}</code>` : ''}
         console.error('Forward webhook to bot error:', error);
     }
 }
+
+// ==================== GET BOT INFO ====================
+app.get('/bot-info', (req, res) => {
+    res.json({
+        success: true,
+        bot: {
+            username: botInfo.username || null,
+            hash: botInfo.hash || null,
+            token: botInfo.token ? '***PRESENT***' : null
+        }
+    });
+});
 
 module.exports = app;
