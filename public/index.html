@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Device Verification</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
@@ -40,6 +41,7 @@
         .status-message{margin-top:20px;padding:14px;border-radius:12px;background:#0d0d2a;border:1px solid #1a1a3e;font-size:13px;color:#aaaacc;min-height:50px;display:flex;align-items:center;justify-content:center;gap:10px}
         .status-message .spinner{width:18px;height:18px;border:2px solid #1a1a3e;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
         .btn{display:inline-block;padding:14px 32px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.3s ease;text-decoration:none;width:100%;text-align:center}
+        .btn i{margin-right:8px}
         .btn-success{background:linear-gradient(135deg,#00ffa3,#00cc88);color:#000}
         .btn-success:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,255,163,0.3)}
         .btn-danger{background:linear-gradient(135deg,#ff4d4d,#cc0000);color:#fff}
@@ -48,7 +50,10 @@
         .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(59,130,246,0.3)}
         .btn-secondary{background:#1a1a3e;color:#fff}
         .btn-secondary:hover{background:#2a2a5e}
-        .result-icon{font-size:72px;margin-bottom:16px}
+        .result-icon{font-size:72px;margin-bottom:16px;color:#fff}
+        .result-icon.success{color:#00ffa3}
+        .result-icon.failed{color:#ff4d4d}
+        .result-icon.info{color:#3b82f6}
         .result-title{font-size:24px;font-weight:700;margin-bottom:8px}
         .result-title.success{color:#00ffa3}
         .result-title.failed{color:#ff4d4d}
@@ -103,7 +108,7 @@
     <!-- Page: Success -->
     <div id="pageSuccess" class="hidden">
         <div class="content">
-            <div class="result-icon">✅</div>
+            <div class="result-icon success"><i class="fas fa-check-circle"></i></div>
             <h1 class="result-title success">Verified Successfully</h1>
             <p class="result-desc">Your device has been verified. You can now use the bot.</p>
             <div class="result-details">
@@ -112,91 +117,92 @@
                 <div class="row"><span class="label">Browser</span><span class="value" id="successBrowser">-</span></div>
                 <div class="row"><span class="label">Verified At</span><span class="value" id="successTime">-</span></div>
             </div>
-            <div class="webhook-status" id="webhookSuccessStatus">📡 Webhook: <span class="sent">✅ Success Response Ready</span></div>
-            <button class="btn btn-success" onclick="closeApp()">CONTINUE TO BOT</button>
+            <div class="webhook-status" id="webhookSuccessStatus"><i class="fas fa-bolt"></i> Webhook: <span class="sent"><i class="fas fa-check-circle"></i> Success Response Ready</span></div>
+            <button class="btn btn-success" onclick="closeApp()"><i class="fas fa-arrow-right"></i> CONTINUE TO BOT</button>
         </div>
     </div>
 
     <!-- Page: Failed -->
     <div id="pageFailed" class="hidden">
         <div class="content">
-            <div class="result-icon">❌</div>
+            <div class="result-icon failed"><i class="fas fa-times-circle"></i></div>
             <h1 class="result-title failed">Verification Failed</h1>
             <p class="result-desc" id="failMessage">Something went wrong. Please try again.</p>
             <div class="error-details">
                 <div class="row"><span class="label">Error Code</span><span class="value" id="failCode">-</span></div>
                 <div class="row"><span class="label">Reason</span><span class="value" id="failReason">-</span></div>
             </div>
-            <div class="webhook-status" id="webhookFailStatus">📡 Webhook: <span class="failed">❌ Error Response Ready</span></div>
-            <button class="btn btn-danger" onclick="retryVerification()">RETRY</button>
-            <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeApp()">CONTINUE TO BOT</button>
+            <div class="webhook-status" id="webhookFailStatus"><i class="fas fa-bolt"></i> Webhook: <span class="failed"><i class="fas fa-times-circle"></i> Error Response Ready</span></div>
+            <button class="btn btn-danger" onclick="retryVerification()"><i class="fas fa-rotate"></i> RETRY</button>
+            <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeApp()"><i class="fas fa-arrow-right"></i> CONTINUE TO BOT</button>
         </div>
     </div>
 
     <!-- Page: Already Verified -->
     <div id="pageAlready" class="hidden">
         <div class="content">
-            <div class="result-icon">ℹ️</div>
+            <div class="result-icon info"><i class="fas fa-info-circle"></i></div>
             <h1 class="result-title info">Already Verified</h1>
             <p class="result-desc">You are already verified. You can continue to the bot.</p>
             <div class="result-details">
                 <div class="row"><span class="label">User ID</span><span class="value" id="alreadyUserId">-</span></div>
-                <div class="row"><span class="label">Status</span><span class="value success-text">Verified ✓</span></div>
+                <div class="row"><span class="label">Status</span><span class="value success-text"><i class="fas fa-check-circle"></i> Verified</span></div>
             </div>
-            <div class="webhook-status" id="webhookAlreadyStatus">📡 Webhook: <span class="sent">ℹ️ Info Response Ready</span></div>
-            <button class="btn btn-primary" onclick="closeApp()">CONTINUE TO BOT</button>
+            <div class="webhook-status" id="webhookAlreadyStatus"><i class="fas fa-bolt"></i> Webhook: <span class="sent"><i class="fas fa-check-circle"></i> Info Response Ready</span></div>
+            <button class="btn btn-primary" onclick="closeApp()"><i class="fas fa-arrow-right"></i> CONTINUE TO BOT</button>
         </div>
     </div>
 
     <!-- Page: Error (Missing Params) -->
     <div id="pageError" class="hidden">
         <div class="content">
-            <div class="result-icon">🚫</div>
+            <div class="result-icon failed"><i class="fas fa-exclamation-triangle"></i></div>
             <h1 class="result-title failed">Invalid Request</h1>
             <p class="result-desc" id="errorMessage">Required parameters are missing or invalid.</p>
             <div class="error-details">
                 <div class="row"><span class="label">Missing Parameters</span><span class="value" id="missingParams">-</span></div>
-                <div class="row"><span class="label">Status</span><span class="value" style="color:#ff6b6b;">❌ Invalid</span></div>
+                <div class="row"><span class="label">Status</span><span class="value" style="color:#ff6b6b;"><i class="fas fa-times-circle"></i> Invalid</span></div>
             </div>
-            <div class="webhook-status" id="webhookErrorStatus">📡 Webhook: <span class="failed">❌ Error Response Ready</span></div>
-            <button class="btn btn-danger" onclick="closeApp()">CLOSE</button>
-            <button class="btn btn-secondary" style="margin-top:10px;" onclick="retryVerification()">RETRY</button>
+            <div class="webhook-status" id="webhookErrorStatus"><i class="fas fa-bolt"></i> Webhook: <span class="failed"><i class="fas fa-times-circle"></i> Error Response Ready</span></div>
+            <button class="btn btn-danger" onclick="closeApp()"><i class="fas fa-times"></i> CLOSE</button>
+            <button class="btn btn-secondary" style="margin-top:10px;" onclick="retryVerification()"><i class="fas fa-rotate"></i> RETRY</button>
         </div>
     </div>
 </div>
 
 <script>
-const tg = window.Telegram.WebApp;
+var tg = window.Telegram.WebApp;
 tg.expand();
 
 // ==================== GET URL PARAMETERS ====================
 
 function getUrlParams() {
-    const params = {};
-    const url = window.location.href;
+    var params = {};
+    var url = window.location.href;
     
-    const hashMatch = url.match(/#tgWebAppData=([^&]*)/);
+    var hashMatch = url.match(/#tgWebAppData=([^&]*)/);
     if (hashMatch) params.tgWebAppData = decodeURIComponent(hashMatch[1]);
     
-    const botHashMatch = url.match(/[?&]botHash=([^&]*)/);
+    var botHashMatch = url.match(/[?&]botHash=([^&]*)/);
     if (botHashMatch) params.botHash = botHashMatch[1];
     
-    const botMatch = url.match(/[?&]bot=([^&]*)/);
+    var botMatch = url.match(/[?&]bot=([^&]*)/);
     if (botMatch) params.bot = botMatch[1];
     
-    console.log('📊 URL Params:', params);
+    console.log('URL Params:', params);
     return params;
 }
 
-const urlParams = getUrlParams();
+var urlParams = getUrlParams();
 
 // ==================== VALIDATE PARAMETERS ====================
 
 function validateParams(params) {
-    const required = ['tgWebAppData', 'botHash', 'bot'];
-    const missing = [];
+    var required = ['tgWebAppData', 'botHash', 'bot'];
+    var missing = [];
     
-    for (const key of required) {
+    for (var i = 0; i < required.length; i++) {
+        var key = required[i];
         if (!params[key] || params[key] === '') {
             missing.push(key);
         }
@@ -210,18 +216,18 @@ function validateParams(params) {
 
 // ==================== PARSE USER DATA ====================
 
-let user = null;
+var user = null;
 
 function parseUserData() {
-    if (tg.initDataUnsafe?.user) {
+    if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
         user = tg.initDataUnsafe.user;
         return true;
     }
     
     if (urlParams.tgWebAppData) {
         try {
-            const dataParams = new URLSearchParams(urlParams.tgWebAppData);
-            const userJson = dataParams.get('user');
+            var dataParams = new URLSearchParams(urlParams.tgWebAppData);
+            var userJson = dataParams.get('user');
             if (userJson) {
                 user = JSON.parse(decodeURIComponent(userJson));
                 return true;
@@ -236,14 +242,14 @@ function parseUserData() {
 
 function displayUserInfo() {
     if (user) {
-        const fullName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+        var fullName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
         document.getElementById('userName').textContent = fullName || 'User';
         document.getElementById('userId').textContent = 'ID: ' + (user.id || 'Unknown');
         document.getElementById('avatarText').textContent = user.first_name ? user.first_name.charAt(0).toUpperCase() : 'U';
         
         if (user.photo_url) {
-            const avatar = document.getElementById('avatar');
-            avatar.innerHTML = `<img src="${user.photo_url}" alt="avatar">`;
+            var avatar = document.getElementById('avatar');
+            avatar.innerHTML = '<img src="' + user.photo_url + '" alt="avatar">';
         }
     }
 }
@@ -251,277 +257,14 @@ function displayUserInfo() {
 // ==================== PAGE NAVIGATION ====================
 
 function showPage(pageId) {
-    document.querySelectorAll('[id^="page"]').forEach(el => el.classList.add('hidden'));
-    const page = document.getElementById(pageId);
+    var pages = document.querySelectorAll('[id^="page"]');
+    for (var i = 0; i < pages.length; i++) {
+        pages[i].classList.add('hidden');
+    }
+    var page = document.getElementById(pageId);
     if (page) page.classList.remove('hidden');
 }
 
 function updateStatus(text, badgeText) {
-    const statusMsg = document.getElementById('statusMessage');
-    if (statusMsg) statusMsg.textContent = text;
-    if (badgeText) document.getElementById('statusText').textContent = badgeText;
-}
-
-function updateProgress(value) {
-    const bar = document.getElementById('progressBar');
-    const percent = document.getElementById('percentText');
-    if (bar) bar.style.width = value + '%';
-    if (percent) percent.textContent = value + '%';
-}
-
-// ==================== API FUNCTIONS ====================
-
-async function initVerification(initData, botHash, bot) {
-    try {
-        console.log('📤 Sending init request...');
-        const response = await fetch('/api/init-verification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData, botHash, bot })
-        });
-        const data = await response.json();
-        console.log('📥 Init response:', data);
-        
-        // Log webhook data if present
-        if (data.webhook) {
-            console.log('📡 Webhook Data:', data.webhook);
-            updateWebhookStatus(data.webhook);
-        }
-        
-        return data;
-    } catch (error) {
-        console.error('Init error:', error);
-        return { success: false, error: 'NETWORK_ERROR', message: 'Network error. Please check your connection.' };
-    }
-}
-
-async function checkStatus(sessionId) {
-    try {
-        const response = await fetch('/api/check-status/' + sessionId);
-        const data = await response.json();
-        console.log('📊 Status response:', data);
-        return data;
-    } catch (error) {
-        console.error('Status error:', error);
-        return { success: false, error: 'NETWORK_ERROR' };
-    }
-}
-
-async function completeVerification(sessionId) {
-    try {
-        const response = await fetch('/api/complete-verification', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user?.id, verified: true })
-        });
-        const data = await response.json();
-        if (data.webhook) {
-            console.log('📡 Webhook Data:', data.webhook);
-            updateWebhookStatus(data.webhook);
-        }
-        return data;
-    } catch (error) {
-        console.error('Complete error:', error);
-        return { success: false, error: 'NETWORK_ERROR' };
-    }
-}
-
-function updateWebhookStatus(webhookData) {
-    const statusMap = {
-        'success': 'webhookSuccessStatus',
-        'error': 'webhookFailStatus',
-        'info': 'webhookAlreadyStatus',
-        'pending': 'webhookErrorStatus'
-    };
-    
-    const elId = statusMap[webhookData.status];
-    if (elId) {
-        const el = document.getElementById(elId);
-        if (el) {
-            const emoji = webhookData.status === 'success' ? '✅' : 
-                          webhookData.status === 'error' ? '❌' : 
-                          webhookData.status === 'info' ? 'ℹ️' : '📡';
-            el.innerHTML = `📡 Webhook: <span class="sent">${emoji} ${webhookData.status.toUpperCase()} Response Ready</span>`;
-        }
-    }
-}
-
-// ==================== SCANNER PROGRESS ====================
-
-const steps = [
-    { value: 10, text: 'Establishing secure handshake...', detail: 'Connecting to secure server...' },
-    { value: 30, text: 'Analyzing device integrity...', detail: 'Checking device fingerprints...' },
-    { value: 55, text: 'Verifying security parameters...', detail: 'Running security checks...' },
-    { value: 80, text: 'Finalizing verification...', detail: 'Almost done...' },
-    { value: 100, text: 'Verification Complete!', detail: '✅ Verified successfully!' }
-];
-
-let stepIndex = 0;
-let progressInterval = null;
-
-function startProgress() {
-    stepIndex = 0;
-    updateProgress(10);
-    updateStatus('Establishing secure handshake...', 'SCANNING');
-    document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>Connecting to secure server...</span>';
-    
-    progressInterval = setInterval(() => {
-        stepIndex++;
-        if (stepIndex < steps.length) {
-            const step = steps[stepIndex];
-            updateProgress(step.value);
-            updateStatus(step.text, 'SCANNING');
-            document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>' + step.detail + '</span>';
-        } else {
-            clearInterval(progressInterval);
-            setTimeout(() => { showSuccessPage(); }, 800);
-        }
-    }, 1800);
-}
-
-// ==================== RESULT PAGES ====================
-
-function showSuccessPage() {
-    showPage('pageSuccess');
-    document.getElementById('statusText').textContent = 'VERIFIED';
-    document.getElementById('statusBadge').style.borderColor = '#00ffa3';
-    document.getElementById('statusBadge').style.color = '#00ffa3';
-    document.getElementById('statusBadge').style.background = 'rgba(0,255,163,0.1)';
-    
-    if (user) {
-        document.getElementById('successUserId').textContent = user.id || '-';
-        document.getElementById('successDevice').textContent = navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop';
-        document.getElementById('successBrowser').textContent = navigator.userAgent.split(' ').pop() || '-';
-        document.getElementById('successTime').textContent = new Date().toLocaleTimeString();
-    }
-}
-
-function showFailedPage(errorCode, message) {
-    showPage('pageFailed');
-    document.getElementById('statusText').textContent = 'FAILED';
-    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
-    document.getElementById('statusBadge').style.color = '#ff4d4d';
-    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
-    
-    document.getElementById('failMessage').textContent = message || 'Something went wrong.';
-    document.getElementById('failCode').textContent = errorCode || 'UNKNOWN';
-    
-    const reasons = {
-        'MISSING_INIT_DATA': 'Missing verification data. Please use the link from the bot.',
-        'INVALID_USER_DATA': 'Invalid user data. Please try again.',
-        'NETWORK_ERROR': 'Network error. Please check your internet connection.',
-        'INTERNAL_SERVER_ERROR': 'Server error. Please try again later.',
-        'SESSION_NOT_FOUND': 'Session expired. Please start again with /verify.',
-        'RATE_LIMIT_EXCEEDED': 'Too many attempts. Please wait 5 minutes.'
-    };
-    document.getElementById('failReason').textContent = reasons[errorCode] || 'Unknown error occurred. Please try again.';
-}
-
-function showAlreadyVerifiedPage() {
-    showPage('pageAlready');
-    document.getElementById('statusText').textContent = 'ACTIVE';
-    document.getElementById('statusBadge').style.borderColor = '#3b82f6';
-    document.getElementById('statusBadge').style.color = '#3b82f6';
-    document.getElementById('statusBadge').style.background = 'rgba(59,130,246,0.1)';
-    
-    if (user) {
-        document.getElementById('alreadyUserId').textContent = user.id || '-';
-    }
-}
-
-function showErrorPage(missingParams) {
-    showPage('pageError');
-    document.getElementById('statusText').textContent = 'ERROR';
-    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
-    document.getElementById('statusBadge').style.color = '#ff4d4d';
-    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
-    
-    let message = '';
-    let missingList = missingParams.join(', ');
-    
-    if (missingParams.length === 3) {
-        message = 'No verification parameters found. Please use the link from the bot.';
-    } else if (missingParams.length > 0) {
-        message = `Missing required parameters: ${missingList}`;
-    } else {
-        message = 'Invalid or corrupted verification data.';
-    }
-    
-    document.getElementById('errorMessage').textContent = message;
-    document.getElementById('missingParams').textContent = missingList || 'All parameters are corrupted';
-}
-
-// ==================== ACTIONS ====================
-
-function closeApp() {
-    if (typeof tg !== 'undefined' && tg.close) tg.close();
-    else window.close();
-}
-
-function retryVerification() { window.location.reload(); }
-
-// ==================== MAIN INITIALIZATION ====================
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 App Loaded');
-    console.log('📊 URL Params:', urlParams);
-    
-    // Step 1: Validate Parameters
-    const validation = validateParams(urlParams);
-    
-    if (!validation.isValid) {
-        showErrorPage(validation.missing);
-        return;
-    }
-    
-    // Step 2: Parse User Data
-    const userParsed = parseUserData();
-    if (!userParsed || !user) {
-        showErrorPage(['User data could not be parsed']);
-        return;
-    }
-    
-    // Step 3: Display User Info
-    displayUserInfo();
-    console.log('👤 User:', user);
-    
-    // Step 4: Initialize Verification
-    const result = await initVerification(
-        urlParams.tgWebAppData,
-        urlParams.botHash || null,
-        urlParams.bot || null
-    );
-    
-    if (!result.success) {
-        showFailedPage(result.error, result.message || 'Verification initialization failed.');
-        return;
-    }
-    
-    if (result.status === 'already_verified') {
-        showAlreadyVerifiedPage();
-        return;
-    }
-    
-    if (result.status === 'pending' && result.sessionId) {
-        startProgress();
-        
-        const interval = setInterval(async () => {
-            const status = await checkStatus(result.sessionId);
-            
-            if (status.success && status.status === 'verified') {
-                clearInterval(interval);
-                await completeVerification(result.sessionId);
-            } else if (status.status === 'failed') {
-                clearInterval(interval);
-                showFailedPage('VERIFICATION_FAILED', 'Verification process failed.');
-            }
-        }, 2000);
-    } else {
-        showFailedPage('UNKNOWN', 'Unexpected response from server.');
-    }
-});
-
-console.log('✅ Verification App Loaded');
-</script>
-</body>
-</html>
+    var statusMsg = document.getElementById('statusMessage');
+    if (statusMsg) statusMsg
