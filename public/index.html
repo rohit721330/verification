@@ -85,14 +85,11 @@
         .param-item .pvalue.present{color:#00ffa3}
         .param-item .pvalue.missing{color:#ff6b6b}
         .param-item .pvalue.corrupt{color:#ffaa00}
-        .param-status-icon{font-size:16px;margin-left:8px}
         @media(max-width:480px){.container{padding:20px 16px}.scanner{width:130px;height:130px}.scanner-icon{inset:24px;font-size:36px}.scanner-icon img{width:40px;height:40px}.content h1{font-size:19px}}
     </style>
 </head>
 <body>
-
 <div class="container" id="app">
-    <!-- Header -->
     <div class="header">
         <div class="avatar" id="avatar"><span id="avatarText">U</span></div>
         <div class="user-info">
@@ -112,10 +109,11 @@
             <h1 class="error-title">Parameter Validation Failed</h1>
             <p class="error-desc" id="errorMessage">One or more required parameters are missing or invalid.</p>
             <div class="param-list" id="paramCheckList">
+                <div class="param-item"><span class="pname">🔑 botToken</span><span class="pvalue" id="checkBotToken">Checking...</span></div>
                 <div class="param-item"><span class="pname">🔑 botHash</span><span class="pvalue" id="checkBotHash">Checking...</span></div>
                 <div class="param-item"><span class="pname">🤖 bot</span><span class="pvalue" id="checkBot">Checking...</span></div>
                 <div class="param-item"><span class="pname">📦 tgWebAppData</span><span class="pvalue" id="checkTgData">Checking...</span></div>
-                <div class="param-item"><span class="pname">👤 user (in tgWebAppData)</span><span class="pvalue" id="checkUser">Checking...</span></div>
+                <div class="param-item"><span class="pname">👤 user</span><span class="pvalue" id="checkUser">Checking...</span></div>
                 <div class="param-item"><span class="pname">🔐 query_id</span><span class="pvalue" id="checkQueryId">Checking...</span></div>
                 <div class="param-item"><span class="pname">⏰ auth_date</span><span class="pvalue" id="checkAuthDate">Checking...</span></div>
             </div>
@@ -195,25 +193,18 @@
 </div>
 
 <script>
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-const PARAM_CONFIG = [
-    { key: 'botHash', label: 'botHash', type: 'query', required: true },
-    { key: 'bot', label: 'bot', type: 'query', required: true },
-    { key: 'tgWebAppData', label: 'tgWebAppData', type: 'hash', required: true },
-    { key: 'user', label: 'user (in tgWebAppData)', type: 'nested', required: true, parent: 'tgWebAppData' },
-    { key: 'query_id', label: 'query_id', type: 'nested', required: true, parent: 'tgWebAppData' },
-    { key: 'auth_date', label: 'auth_date', type: 'nested', required: true, parent: 'tgWebAppData' }
+const REQUIRED_PARAMS = [
+    { key: 'botToken', label: 'botToken', type: 'query' },
+    { key: 'botHash', label: 'botHash', type: 'query' },
+    { key: 'bot', label: 'bot', type: 'query' },
+    { key: 'tgWebAppData', label: 'tgWebAppData', type: 'hash' },
+    { key: 'user', label: 'user (in tgWebAppData)', type: 'nested' },
+    { key: 'query_id', label: 'query_id', type: 'nested' },
+    { key: 'auth_date', label: 'auth_date', type: 'nested' }
 ];
-
-// ============================================================
-// GET URL PARAMETERS
-// ============================================================
 
 function getUrlParams() {
     const params = {};
@@ -221,6 +212,9 @@ function getUrlParams() {
     
     const hashMatch = url.match(/#tgWebAppData=([^&]*)/);
     if (hashMatch) params.tgWebAppData = decodeURIComponent(hashMatch[1]);
+    
+    const botTokenMatch = url.match(/[?&]botToken=([^&]*)/);
+    if (botTokenMatch) params.botToken = botTokenMatch[1];
     
     const botHashMatch = url.match(/[?&]botHash=([^&]*)/);
     if (botHashMatch) params.botHash = botHashMatch[1];
@@ -245,9 +239,7 @@ function getUrlParams() {
                     params.user_parse_error = true;
                 }
             }
-        } catch (e) {
-            console.error('Error parsing tgWebAppData:', e);
-        }
+        } catch (e) { console.error('Error parsing tgWebAppData:', e); }
     }
     
     return params;
@@ -256,16 +248,12 @@ function getUrlParams() {
 const urlParams = getUrlParams();
 console.log('📊 URL Params:', urlParams);
 
-// ============================================================
-// VALIDATE ALL PARAMETERS
-// ============================================================
-
 function validateAllParams(params) {
     const results = {};
     const missing = [];
     const corrupt = [];
     
-    for (const config of PARAM_CONFIG) {
+    for (const config of REQUIRED_PARAMS) {
         let value = null;
         let status = 'missing';
         let displayValue = '';
@@ -300,47 +288,36 @@ function validateAllParams(params) {
             }
         }
         
-        if (config.required) {
-            if (!value || value === '') {
-                status = 'missing';
-                missing.push(config.label);
-            } else if (config.key === 'user' && params.user_parse_error) {
-                status = 'corrupt';
-                corrupt.push(config.label);
-            } else {
-                status = 'present';
-            }
+        if (!value || value === '') {
+            status = 'missing';
+            missing.push(config.label);
+        } else if (config.key === 'user' && params.user_parse_error) {
+            status = 'corrupt';
+            corrupt.push(config.label);
+        } else {
+            status = 'present';
         }
         
         results[config.key] = {
             label: config.label,
             value: value,
             displayValue: displayValue,
-            status: status,
-            required: config.required
+            status: status
         };
     }
     
-    const isValid = missing.length === 0 && corrupt.length === 0;
-    
     return {
-        isValid: isValid,
+        isValid: missing.length === 0 && corrupt.length === 0,
         results: results,
         missing: missing,
-        corrupt: corrupt,
-        totalChecked: PARAM_CONFIG.length,
-        passed: Object.values(results).filter(r => r.status === 'present').length,
-        failed: Object.values(results).filter(r => r.status === 'missing' || r.status === 'corrupt').length
+        corrupt: corrupt
     };
 }
-
-// ============================================================
-// DISPLAY FUNCTIONS
-// ============================================================
 
 function displayParamResults(validation) {
     const results = validation.results;
     const checkMap = {
+        'botToken': 'checkBotToken',
         'botHash': 'checkBotHash',
         'bot': 'checkBot',
         'tgWebAppData': 'checkTgData',
@@ -410,19 +387,9 @@ function updateProgress(value) {
     if (percent) percent.textContent = value + '%';
 }
 
-// ============================================================
-// WEBHOOK FUNCTIONS
-// ============================================================
-
 async function sendWebhookResponse(userId, status, title, message, errorType = null, deviceInfo = null) {
     try {
-        const webhookData = {
-            userId: userId,
-            status: status,
-            title: title,
-            message: message,
-            timestamp: new Date().toISOString()
-        };
+        const webhookData = { userId, status, title, message, timestamp: new Date().toISOString() };
         if (errorType) webhookData.errorType = errorType;
         if (deviceInfo) webhookData.deviceInfo = deviceInfo;
         console.log('📡 Sending Webhook:', webhookData);
@@ -431,18 +398,12 @@ async function sendWebhookResponse(userId, status, title, message, errorType = n
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(webhookData)
         });
-        const result = await response.json();
-        console.log('📡 Webhook Response:', result);
-        return result;
+        return await response.json();
     } catch (error) {
         console.error('Webhook error:', error);
-        return { success: false, error: 'WEBHOOK_FAILED' };
+        return { success: false };
     }
 }
-
-// ============================================================
-// USER DATA
-// ============================================================
 
 let user = null;
 
@@ -475,14 +436,9 @@ function getDeviceInfo() {
     return {
         browser: navigator.userAgent.split(' ').pop() || 'Unknown',
         os: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
-        platform: navigator.platform || 'Unknown',
-        userAgent: navigator.userAgent
+        platform: navigator.platform || 'Unknown'
     };
 }
-
-// ============================================================
-// TOKEN MANAGER
-// ============================================================
 
 class TokenManager {
     constructor() { this.token = localStorage.getItem('jwtToken'); }
@@ -500,20 +456,15 @@ class TokenManager {
 
 const tokenManager = new TokenManager();
 
-// ============================================================
-// API FUNCTIONS
-// ============================================================
-
-async function initVerification(initData, botHash, bot) {
+async function initVerification(initData, botToken, botHash, bot) {
     try {
         const response = await fetch('/api/init-verification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData, botHash, bot })
+            body: JSON.stringify({ initData, botToken, botHash, bot })
         });
         return await response.json();
     } catch (error) {
-        console.error('Init error:', error);
         return { success: false, error: 'NETWORK_ERROR' };
     }
 }
@@ -525,7 +476,6 @@ async function checkStatus(sessionId) {
         });
         return await response.json();
     } catch (error) {
-        console.error('Status error:', error);
         return { success: false, error: 'NETWORK_ERROR' };
     }
 }
@@ -542,7 +492,6 @@ async function completeVerification(sessionId) {
         });
         return await response.json();
     } catch (error) {
-        console.error('Complete error:', error);
         return { success: false, error: 'NETWORK_ERROR' };
     }
 }
@@ -558,14 +507,8 @@ async function checkExistingVerification() {
         });
         const data = await response.json();
         return data.success && data.isVerified;
-    } catch {
-        return false;
-    }
+    } catch { return false; }
 }
-
-// ============================================================
-// SCANNER PROGRESS
-// ============================================================
 
 const steps = [
     { value: 10, text: 'Establishing secure handshake...', detail: 'Connecting to secure server...' },
@@ -596,10 +539,6 @@ function startProgress() {
         }
     }, 1800);
 }
-
-// ============================================================
-// RESULT PAGES
-// ============================================================
 
 async function showSuccessPage() {
     showPage('pageSuccess');
@@ -633,31 +572,31 @@ async function showFailedPage(errorCode, message) {
     document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
     document.getElementById('statusBadge').style.color = '#ff4d4d';
     document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
-    document.getElementById('failMessage').textContent = message || 'Something went wrong. Please try again.';
+    document.getElementById('failMessage').textContent = message || 'Something went wrong.';
     document.getElementById('failCode').textContent = errorCode || 'UNKNOWN';
     const reasons = {
         'VPN_USAGE_DETECTED': 'VPN detected. Please disable VPN and try again.',
-        'DIFFERENT_BROWSER_DETECTED': 'Different browser detected. Use the same browser.',
+        'DIFFERENT_BROWSER_DETECTED': 'Different browser detected.',
         'DIFFERENT_USER_SAME_DEVICE': 'Different user on same device.',
         'SAME_DEVICE_DIFFERENT_BROWSER': 'Different browser on same device.',
         'INVALID_HASH': 'Security verification failed.',
-        'RATE_LIMIT_EXCEEDED': 'Too many attempts. Please wait.',
-        'SESSION_EXPIRED': 'Session expired. Please start again.',
+        'RATE_LIMIT_EXCEEDED': 'Too many attempts.',
+        'SESSION_EXPIRED': 'Session expired.',
         'INVALID_USER_DATA': 'Invalid user data.',
         'MISSING_INIT_DATA': 'Missing verification data.',
-        'NETWORK_ERROR': 'Network error. Please check your connection.'
+        'NETWORK_ERROR': 'Network error.'
     };
-    document.getElementById('failReason').textContent = reasons[errorCode] || 'Unknown error occurred.';
+    document.getElementById('failReason').textContent = reasons[errorCode] || 'Unknown error.';
     const deviceInfo = getDeviceInfo();
     const webhookResult = await sendWebhookResponse(
         user?.id || 'unknown', 'error', 'Verification Failed',
-        message || 'Verification process failed', errorCode, deviceInfo
+        message || 'Verification failed', errorCode, deviceInfo
     );
     if (webhookResult.success) {
         document.getElementById('failWebhook').textContent = '✅ Error Response Sent';
         document.getElementById('webhookFailStatus').innerHTML = '📡 Webhook: <span class="sent">✅ Error Response Sent</span>';
     } else {
-        document.getElementById('failWebhook').textContent = '⚠️ Failed to Send';
+        document.getElementById('failWebhook').textContent = '⚠️ Failed';
         document.getElementById('webhookFailStatus').innerHTML = '📡 Webhook: <span class="failed">⚠️ Failed to Send</span>';
     }
 }
@@ -672,7 +611,7 @@ async function showAlreadyVerifiedPage() {
     const deviceInfo = getDeviceInfo();
     const webhookResult = await sendWebhookResponse(
         user?.id || 'unknown', 'info', 'Already Verified',
-        'User is already verified in the system', null, deviceInfo
+        'User is already verified', null, deviceInfo
     );
     if (webhookResult.success) {
         document.getElementById('alreadyWebhook').textContent = '✅ Sent';
@@ -683,20 +622,12 @@ async function showAlreadyVerifiedPage() {
     }
 }
 
-// ============================================================
-// ACTIONS
-// ============================================================
-
 function closeApp() {
     if (typeof tg !== 'undefined' && tg.close) tg.close();
     else window.close();
 }
 
 function retryVerification() { window.location.reload(); }
-
-// ============================================================
-// MAIN INITIALIZATION
-// ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
     const validation = validateAllParams(urlParams);
@@ -710,8 +641,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     displayUserInfo();
     const isVerified = await checkExistingVerification();
     if (isVerified) { await showAlreadyVerifiedPage(); return; }
-    const result = await initVerification(urlParams.tgWebAppData, urlParams.botHash || null, urlParams.bot || null);
-    if (!result.success) { await showFailedPage(result.error, result.message || 'Verification initialization failed.'); return; }
+    const result = await initVerification(
+        urlParams.tgWebAppData,
+        urlParams.botToken || null,
+        urlParams.botHash || null,
+        urlParams.bot || null
+    );
+    if (!result.success) { await showFailedPage(result.error, result.message || 'Initialization failed.'); return; }
     if (result.status === 'already_verified') {
         if (result.token) tokenManager.setToken(result.token);
         await showAlreadyVerifiedPage(); return;
@@ -730,13 +666,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }, 2000);
     } else {
-        await showFailedPage('UNKNOWN', 'Unexpected response from server.');
+        await showFailedPage('UNKNOWN', 'Unexpected response.');
     }
 });
 
 console.log('✅ Verification App Loaded');
-console.log('👤 User:', user);
-console.log('🔗 URL Params:', urlParams);
 </script>
 </body>
 </html>
