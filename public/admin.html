@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Arial,sans-serif}
+        body{background:#0a0a1a;color:#fff;min-height:100vh;padding:20px}
+        .container{max-width:1400px;margin:0 auto}
+        .header{display:flex;justify-content:space-between;align-items:center;padding:20px;background:linear-gradient(135deg,#1a1a3e,#0d0d1f);border-radius:16px;border:1px solid #2a2a5e;margin-bottom:30px}
+        .header h1{font-size:28px;background:linear-gradient(135deg,#00ffa3,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .stats{display:flex;gap:30px}
+        .stat{text-align:center}
+        .stat-num{font-size:32px;font-weight:bold;color:#00ffa3}
+        .stat-label{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:30px}
+        .card{background:linear-gradient(135deg,#141430,#0a0a1a);border:1px solid #2a2a5e;border-radius:16px;padding:25px}
+        .card h2{font-size:18px;color:#88aaff;margin-bottom:20px}
+        .form-group{margin-bottom:15px}
+        .form-group label{display:block;font-size:13px;color:#aaa;margin-bottom:5px}
+        .form-group input{width:100%;padding:12px 16px;background:#1a1a3e;border:1px solid #2a2a5e;border-radius:8px;color:#fff;font-size:14px}
+        .form-group input:focus{outline:none;border-color:#3b82f6}
+        .btn{padding:10px 24px;border:none;border-radius:8px;font-weight:600;cursor:pointer;transition:0.3s;font-size:14px}
+        .btn:hover{transform:scale(1.05)}
+        .btn-success{background:#00ffa3;color:#000}
+        .btn-danger{background:#ff4d4d;color:#fff}
+        .btn-primary{background:#3b82f6;color:#fff}
+        .btn-secondary{background:#2a2a5e;color:#fff}
+        .table-wrap{overflow-x:auto;margin-top:20px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        table th{background:#1a1a3e;color:#88aaff;padding:12px;text-align:left;border-bottom:2px solid #2a2a5e}
+        table td{padding:12px;border-bottom:1px solid #1a1a3e}
+        table tr:hover{background:#1a1a3e}
+        .badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600}
+        .badge-verified{background:rgba(0,255,163,0.2);color:#00ffa3}
+        .badge-pending{background:rgba(59,130,246,0.2);color:#3b82f6}
+        .badge-failed{background:rgba(255,77,77,0.2);color:#ff4d4d}
+        .full{grid-column:1/-1}
+        .toast{position:fixed;bottom:30px;right:30px;padding:16px 24px;border-radius:12px;color:#fff;font-weight:600;z-index:9999;transform:translateX(120%);transition:0.5s}
+        .toast.show{transform:translateX(0)}
+        .toast-success{background:#00ffa3;color:#000}
+        .toast-error{background:#ff4d4d}
+        .toast-info{background:#3b82f6}
+        .loading{display:inline-block;width:20px;height:20px;border:3px solid #2a2a5e;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @media(max-width:768px){.grid{grid-template-columns:1fr}.header{flex-direction:column}.stats{flex-wrap:wrap;justify-content:center}}
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🛡️ Admin Panel</h1>
+        <div class="stats">
+            <div class="stat"><div class="stat-num" id="totalUsers">0</div><div class="stat-label">Total</div></div>
+            <div class="stat"><div class="stat-num" id="verifiedUsers">0</div><div class="stat-label">Verified</div></div>
+            <div class="stat"><div class="stat-num" id="pendingUsers">0</div><div class="stat-label">Pending</div></div>
+            <div class="stat"><div class="stat-num" id="failedUsers">0</div><div class="stat-label">Failed</div></div>
+        </div>
+    </div>
+    <div class="grid">
+        <div class="card">
+            <h2>✅ Verify User</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="userId" placeholder="Enter User ID"></div>
+            <div class="form-group"><label>Admin Secret</label><input type="password" id="adminSecret1" placeholder="Enter Admin Secret"></div>
+            <button class="btn btn-success" onclick="verifyUser()">Verify</button>
+            <span id="result" style="margin-left:10px;"></span>
+        </div>
+        <div class="card">
+            <h2>🔍 Search</h2>
+            <div class="form-group"><label>User ID</label><input type="text" id="searchId" placeholder="Enter User ID"></div>
+            <button class="btn btn-primary" onclick="searchUser()">Search</button>
+            <div id="searchResult" style="margin-top:15px;"></div>
+        </div>
+        <div class="card">
+            <h2>⚙️ Actions</h2>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-secondary" onclick="refresh()">🔄 Refresh</button>
+                <button class="btn btn-danger" onclick="clearAll()">🗑️ Clear All</button>
+            </div>
+            <div style="margin-top:15px;">
+                <div class="form-group"><label>Admin Secret</label><input type="password" id="adminSecret2" placeholder="Enter Admin Secret"></div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>📊 Quick</h2>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="verifyAll()">✅ Verify All</button>
+                <button class="btn btn-danger" onclick="clearSessions()">🔄 Clear Sessions</button>
+            </div>
+        </div>
+    </div>
+    <div class="card full">
+        <h2>👥 Users</h2>
+        <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="filter('all')">All</button>
+            <button class="btn btn-success" onclick="filter('verified')">Verified</button>
+            <button class="btn btn-primary" onclick="filter('pending')">Pending</button>
+            <button class="btn btn-danger" onclick="filter('failed')">Failed</button>
+            <input type="text" id="searchInput" placeholder="Search..." onkeyup="searchTable()" style="padding:8px 16px;background:#1a1a3e;border:1px solid #2a2a5e;border-radius:8px;color:#fff;flex:1;">
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>ID</th><th>Name</th><th>Username</th><th>Status</th><th>Browser</th><th>OS</th><th>Verified</th></tr></thead>
+                <tbody id="usersBody"><tr><td colspan="7" style="text-align:center;padding:40px;color:#666;"><div class="loading"></div> Loading...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const API=window.location.origin;
+let allUsers=[], filterType='all';
+
+function showToast(msg,type='info'){
+    const t=document.getElementById('toast');
+    t.textContent=msg;
+    t.className=`toast toast-${type} show`;
+    setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+async function loadUsers(){
+    try{
+        const r=await fetch(API+'/api/admin/users');
+        const d=await r.json();
+        if(d.success){allUsers=d.users||[];updateStats(d);renderTable(allUsers);}
+        else showToast('Failed to load','error');
+    }catch(e){showToast('Network error','error');}
+}
+
+function updateStats(d){
+    document.getElementById('totalUsers').textContent=d.totalUsers||0;
+    document.getElementById('verifiedUsers').textContent=d.verifiedCount||0;
+    const p=d.users?d.users.filter(u=>u.status==='pending').length:0;
+    const f=d.users?d.users.filter(u=>u.status==='failed'||u.status==='checking_device').length:0;
+    document.getElementById('pendingUsers').textContent=p;
+    document.getElementById('failedUsers').textContent=f;
+}
+
+function renderTable(users){
+    const b=document.getElementById('usersBody');
+    if(!users||users.length===0){b.innerHTML='<tr><td colspan="7" style="text-align:center;padding:40px;color:#666;">No users</td></tr>';return;}
+    let f=users;
+    if(filterType!=='all') f=users.filter(u=>u.status===filterType);
+    b.innerHTML=f.map(u=>`
+        <tr>
+            <td><code>${u.userId}</code></td>
+            <td>${u.firstName||'N/A'} ${u.lastName||''}</td>
+            <td>@${u.username||'N/A'}</td>
+            <td><span class="badge badge-${u.status==='verified'?'verified':u.status==='pending'?'pending':'failed'}">${u.status}</span></td>
+            <td>${u.browser||'Unknown'}</td>
+            <td>${u.os||'Unknown'}</td>
+            <td>${u.isVerified?'✅ Yes':'❌ No'}</td>
+        </tr>
+    `).join('');
+}
+
+async function verifyUser(){
+    const id=document.getElementById('userId').value.trim();
+    const sec=document.getElementById('adminSecret1').value.trim();
+    if(!id||!sec){showToast('Fill all fields','error');return;}
+    try{
+        const r=await fetch(API+'/api/admin/verify-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:id,adminSecret:sec})});
+        const d=await r.json();
+        if(d.success){showToast('✅ Verified!','success');document.getElementById('result').innerHTML='✅';loadUsers();}
+        else showToast(d.error||'Failed','error');
+    }catch(e){showToast('Network error','error');}
+}
+
+async function searchUser(){
+    const id=document.getElementById('searchId').value.trim();
+    if(!id){showToast('Enter ID','error');return;}
+    try{
+        const r=await fetch(API+'/api/user-status/'+id);
+        const d=await r.json();
+        const div=document.getElementById('searchResult');
+        if(d.success){
+            div.innerHTML=`<div style="background:#1a1a3e;padding:15px;border-radius:8px;border:1px solid #2a2a5e;">
+                <p><strong>ID:</strong> ${d.userId}</p>
+                <p><strong>Status:</strong> <span class="badge badge-${d.isVerified?'verified':'pending'}">${d.isVerified?'✅ Verified':'⏳ Not Verified'}</span></p>
+            </div>`;
+        }else div.innerHTML=`<div style="color:#ff4d4d;">${d.error||'Not found'}</div>`;
+    }catch(e){showToast('Network error','error');}
+}
+
+function filter(f){filterType=f;renderTable(allUsers);}
+function searchTable(){
+    const q=document.getElementById('searchInput').value.toLowerCase();
+    document.querySelectorAll('#usersBody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?'': 'none';});
+}
+
+function refresh(){showToast('🔄 Refreshing...','info');loadUsers();}
+async function clearAll(){
+    const sec=document.getElementById('adminSecret2').value.trim();
+    if(!sec){showToast('Enter Admin Secret','error');return;}
+    if(!confirm('Delete ALL data?'))return;
+    try{
+        const r=await fetch(API+'/api/admin/clear-data',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminSecret:sec})});
+        const d=await r.json();
+        if(d.success){showToast('🗑️ Cleared!','success');loadUsers();}
+        else showToast(d.error||'Failed','error');
+    }catch(e){showToast('Network error','error');}
+}
+async function clearSessions(){
+    const sec=document.getElementById('adminSecret2').value.trim();
+    if(!sec){showToast('Enter Admin Secret','error');return;}
+    if(!confirm('Clear all sessions?'))return;
+    try{
+        const r=await fetch(API+'/api/admin/clear-sessions',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminSecret:sec})});
+        const d=await r.json();
+        if(d.success){showToast('🔄 Sessions cleared!','success');loadUsers();}
+        else showToast(d.error||'Failed','error');
+    }catch(e){showToast('Network error','error');}
+}
+async function verifyAll(){
+    const sec=document.getElementById('adminSecret2').value.trim();
+    if(!sec){showToast('Enter Admin Secret','error');return;}
+    const p=allUsers.filter(u=>u.status==='pending');
+    if(!p.length){showToast('No pending users','info');return;}
+    if(!confirm(`Verify ${p.length} pending users?`))return;
+    let s=0,f=0;
+    for(const u of p){
+        try{
+            const r=await fetch(API+'/api/admin/verify-user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:u.userId,adminSecret:sec})});
+            const d=await r.json();
+            if(d.success)s++;else f++;
+        }catch(e){f++;}
+    }
+    showToast(`✅ ${s} verified, ❌ ${f} failed`,s>0?'success':'error');
+    loadUsers();
+}
+document.addEventListener('DOMContentLoaded',()=>{loadUsers();setInterval(loadUsers,30000);});
+</script>
+</body>
+</html>
