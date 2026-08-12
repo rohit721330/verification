@@ -2,29 +2,17 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const axios = require('axios');
-require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ==================== STORAGE ====================
 const userSessions = new Map();
 const verifiedUsers = new Set();
 
 // ==================== HELPER FUNCTIONS ====================
-
-function generateDeviceFingerprint(req) {
-    const userAgent = req.headers['user-agent'] || '';
-    const acceptLanguage = req.headers['accept-language'] || '';
-    const acceptEncoding = req.headers['accept-encoding'] || '';
-    const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '';
-    
-    return crypto
-        .createHash('sha256')
-        .update(`${userAgent}|${acceptLanguage}|${acceptEncoding}|${ip}`)
-        .digest('hex');
-}
 
 function getBrowserInfo(req) {
     const userAgent = req.headers['user-agent'] || '';
@@ -59,65 +47,23 @@ function parseUserData(initData) {
     }
 }
 
-// ==================== SEND WEBHOOK TO BOT ====================
+// ==================== WEBHOOK FUNCTIONS ====================
 
-async function sendWebhookToBot(userId, status, title, message, errorType = null, deviceInfo = null) {
-    try {
-        // Get bot token from environment or use default
-        const botToken = process.env.BOT_TOKEN;
-        if (!botToken) {
-            console.log('⚠️ No bot token available');
-            return;
-        }
-        
-        const webhookData = {
-            userId: userId,
-            status: status,
-            title: title,
-            message: message,
-            timestamp: new Date().toISOString()
-        };
-        
-        if (errorType) webhookData.errorType = errorType;
-        if (deviceInfo) webhookData.deviceInfo = deviceInfo;
-        
-        console.log('📡 Sending Webhook:', webhookData);
-        
-        // Send to bot's webhook handler
-        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-        
-        let statusEmoji = 'ℹ️';
-        let statusText = 'INFO';
-        
-        if (status === 'success') {
-            statusEmoji = '✅';
-            statusText = 'SUCCESS';
-        } else if (status === 'error') {
-            statusEmoji = '❌';
-            statusText = 'ERROR';
-        }
-        
-        const botMessage = `${statusEmoji} <b>Webhook Response</b>
-
-<b>Status:</b> ${statusText}
-<b>User ID:</b> <code>${userId}</code>
-<b>Title:</b> ${title}
-<b>Message:</b> ${message}
-${errorType ? `<b>Error Type:</b> <code>${errorType}</code>` : ''}
-${deviceInfo ? `<b>Device:</b> ${deviceInfo.browser || 'N/A'} | ${deviceInfo.os || 'N/A'}` : ''}
-<b>Timestamp:</b> ${webhookData.timestamp}`;
-        
-        await axios.post(url, {
-            chat_id: userId,
-            text: botMessage,
-            parse_mode: 'HTML'
-        });
-        
-        console.log('📡 Webhook sent to user:', userId);
-        
-    } catch (error) {
-        console.error('Send webhook error:', error);
-    }
+// ওয়েবহুক ডেটা তৈরি করা (JSON রেসপন্স)
+function createWebhookResponse(userId, status, title, message, errorType = null, deviceInfo = null) {
+    const webhookData = {
+        userId: userId,
+        status: status,
+        title: title,
+        message: message,
+        timestamp: new Date().toISOString()
+    };
+    
+    if (errorType) webhookData.errorType = errorType;
+    if (deviceInfo) webhookData.deviceInfo = deviceInfo;
+    
+    console.log('📡 Webhook Data:', JSON.stringify(webhookData, null, 2));
+    return webhookData;
 }
 
 // ==================== API ROUTES ====================
@@ -126,34 +72,55 @@ ${deviceInfo ? `<b>Device:</b> ${deviceInfo.browser || 'N/A'} | ${deviceInfo.os 
 app.post('/init-verification', async (req, res) => {
     try {
         const { initData, botHash, bot } = req.body;
-        const deviceFingerprint = generateDeviceFingerprint(req);
         const browserInfo = getBrowserInfo(req);
         
+        console.log('📥 Init Verification Request:', { botHash, bot, hasInitData: !!initData });
+        
         if (!initData) {
+            const webhookData = createWebhookResponse(
+                'unknown',
+                'error',
+                'Missing Data',
+                'No verification data found',
+                'MISSING_INIT_DATA',
+                browserInfo
+            );
             return res.status(400).json({
                 success: false,
                 error: 'MISSING_INIT_DATA',
                 title: 'Missing Data',
-                message: 'Missing required data.'
+                message: 'Missing required data.',
+                webhook: webhookData
             });
         }
         
         const user = parseUserData(initData);
         if (!user || !user.id) {
+            const webhookData = createWebhookResponse(
+                'unknown',
+                'error',
+                'Invalid User',
+                'User data could not be parsed',
+                'INVALID_USER_DATA',
+                browserInfo
+            );
             return res.status(400).json({
                 success: false,
                 error: 'INVALID_USER_DATA',
                 title: 'Invalid User',
-                message: 'Invalid user data.'
+                message: 'Invalid user data.',
+                webhook: webhookData
             });
         }
+        
+        console.log('👤 User:', user.id, user.first_name);
         
         // Check if already verified
         const userIdStr = user.id.toString();
         const isVerified = verifiedUsers.has(userIdStr);
         
         if (isVerified) {
-            await sendWebhookToBot(
+            const webhookData = createWebhookResponse(
                 userIdStr,
                 'info',
                 'Already Verified',
@@ -167,7 +134,8 @@ app.post('/init-verification', async (req, res) => {
                 status: 'already_verified',
                 user: user,
                 title: 'Already Verified',
-                message: 'You are already verified.'
+                message: 'You are already verified.',
+                webhook: webhookData
             });
         }
         
@@ -183,13 +151,42 @@ app.post('/init-verification', async (req, res) => {
             createdAt: Date.now(),
             botHash: botHash || null,
             bot: bot || null,
-            deviceFingerprint: deviceFingerprint,
             browser: browserInfo.browser,
             os: browserInfo.os
         });
         
-        // Start verification process
-        startVerificationProcess(sessionId, user.id);
+        console.log('✅ Session created:', sessionId);
+        
+        // Start verification process (auto-verify for demo)
+        setTimeout(async () => {
+            if (userSessions.has(sessionId)) {
+                const session = userSessions.get(sessionId);
+                session.status = 'verified';
+                userSessions.set(sessionId, session);
+                verifiedUsers.add(userIdStr);
+                
+                const webhookData = createWebhookResponse(
+                    userIdStr,
+                    'success',
+                    'Verification Complete',
+                    'Device verified successfully!',
+                    null,
+                    browserInfo
+                );
+                
+                console.log('✅ User verified:', userIdStr);
+                console.log('📡 Webhook Response:', JSON.stringify(webhookData, null, 2));
+            }
+        }, 5000);
+        
+        const webhookData = createWebhookResponse(
+            user.id,
+            'pending',
+            'Verification Started',
+            'Your device verification has been started.',
+            null,
+            browserInfo
+        );
         
         res.json({
             success: true,
@@ -201,16 +198,26 @@ app.post('/init-verification', async (req, res) => {
             deviceInfo: {
                 browser: browserInfo.browser,
                 os: browserInfo.os
-            }
+            },
+            webhook: webhookData
         });
         
     } catch (error) {
         console.error('Init verification error:', error);
+        const webhookData = createWebhookResponse(
+            'unknown',
+            'error',
+            'Server Error',
+            'Internal server error occurred',
+            'INTERNAL_SERVER_ERROR',
+            getBrowserInfo(req)
+        );
         res.status(500).json({
             success: false,
             error: 'INTERNAL_SERVER_ERROR',
             title: 'Server Error',
-            message: 'Server error. Please try again later.'
+            message: 'Server error. Please try again later.',
+            webhook: webhookData
         });
     }
 });
@@ -219,6 +226,8 @@ app.post('/init-verification', async (req, res) => {
 app.get('/check-status/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
+        
+        console.log('📊 Check Status:', sessionId);
         
         if (!sessionId || !userSessions.has(sessionId)) {
             return res.status(404).json({
@@ -268,7 +277,9 @@ app.get('/check-status/:sessionId', async (req, res) => {
 app.post('/complete-verification', async (req, res) => {
     try {
         const { userId, verified } = req.body;
-        const deviceInfo = getBrowserInfo(req);
+        const browserInfo = getBrowserInfo(req);
+        
+        console.log('✅ Complete Verification:', userId, verified);
         
         if (!userId) {
             return res.status(400).json({
@@ -289,14 +300,13 @@ app.post('/complete-verification', async (req, res) => {
                 }
             }
             
-            // Send webhook response to bot
-            await sendWebhookToBot(
+            const webhookData = createWebhookResponse(
                 userId,
                 'success',
                 'Verification Complete',
                 'Device verified successfully!',
                 null,
-                deviceInfo
+                browserInfo
             );
             
             res.json({
@@ -305,16 +315,17 @@ app.post('/complete-verification', async (req, res) => {
                 verified: true,
                 userId: userId,
                 title: 'Verification Complete',
-                message: 'Your device has been verified successfully!'
+                message: 'Your device has been verified successfully!',
+                webhook: webhookData
             });
         } else {
-            await sendWebhookToBot(
+            const webhookData = createWebhookResponse(
                 userId,
                 'info',
                 'Verification Cancelled',
                 'User cancelled verification',
                 null,
-                deviceInfo
+                browserInfo
             );
             res.json({
                 success: true,
@@ -322,7 +333,8 @@ app.post('/complete-verification', async (req, res) => {
                 verified: false,
                 userId: userId,
                 title: 'Verification Cancelled',
-                message: 'Verification cancelled.'
+                message: 'Verification cancelled.',
+                webhook: webhookData
             });
         }
         
@@ -337,34 +349,7 @@ app.post('/complete-verification', async (req, res) => {
     }
 });
 
-// 4. Webhook Endpoint (for external calls)
-app.post('/webhook', async (req, res) => {
-    try {
-        const { userId, status, title, message, errorType, deviceInfo, timestamp } = req.body;
-        
-        console.log('📡 Webhook Received:', { userId, status, title, message });
-        
-        // Forward to bot
-        await sendWebhookToBot(userId, status, title, message, errorType, deviceInfo);
-        
-        res.json({
-            success: true,
-            message: 'Webhook received successfully',
-            received: { userId, status, title }
-        });
-        
-    } catch (error) {
-        console.error('Webhook error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'WEBHOOK_ERROR',
-            title: 'Webhook Error',
-            message: 'Failed to process webhook'
-        });
-    }
-});
-
-// 5. User Status
+// 4. User Status
 app.get('/user-status/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
@@ -390,58 +375,29 @@ app.get('/user-status/:userId', async (req, res) => {
     }
 });
 
-// 6. Get Bot Info
-app.get('/bot-info', (req, res) => {
+// 5. Health Check
+app.get('/health', (req, res) => {
     res.json({
         success: true,
-        bot: {
-            username: process.env.BOT_USERNAME || 'Not Set',
-            token: process.env.BOT_TOKEN ? '***PRESENT***' : 'Not Set'
-        }
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        verifiedCount: verifiedUsers.size,
+        sessionCount: userSessions.size
     });
 });
 
-// ==================== VERIFICATION PROCESS ====================
-
-async function startVerificationProcess(sessionId, userId) {
-    try {
-        const steps = [
-            { delay: 2000, status: 'checking_device' },
-            { delay: 3000, status: 'analyzing_security' },
-            { delay: 2500, status: 'final_check' }
-        ];
-        
-        for (const step of steps) {
-            await new Promise(resolve => setTimeout(resolve, step.delay));
-            if (userSessions.has(sessionId)) {
-                const session = userSessions.get(sessionId);
-                session.status = step.status;
-                userSessions.set(sessionId, session);
-            }
-        }
-        
-        const userIdStr = userId.toString();
-        if (!verifiedUsers.has(userIdStr)) {
-            verifiedUsers.add(userIdStr);
-            if (userSessions.has(sessionId)) {
-                const session = userSessions.get(sessionId);
-                session.status = 'verified';
-                userSessions.set(sessionId, session);
-            }
-            
-            await sendWebhookToBot(
-                userId,
-                'success',
-                'Verification Complete',
-                'Device verified successfully!',
-                null,
-                { browser: 'Auto', os: 'System' }
-            );
-        }
-        
-    } catch (error) {
-        console.error('Start verification process error:', error);
-    }
-}
+// 6. Bot Register (for bot registration)
+app.get('/api/bot_register', (req, res) => {
+    const { botHash, bot, webhook_url, bot_token } = req.query;
+    console.log('📝 Bot Register:', { botHash, bot, webhook_url, bot_token: bot_token ? '***' : 'missing' });
+    
+    res.json({
+        success: true,
+        message: 'Bot registered successfully',
+        botHash: botHash,
+        bot: bot,
+        webhook_url: webhook_url
+    });
+});
 
 module.exports = app;
