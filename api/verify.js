@@ -21,12 +21,7 @@ const userBrowserHistory = new Map();
 const vpnBlocklist = new Set();
 const rateLimiter = new Map();
 
-// Store bot info from URL params
-let botInfo = {
-    token: null,
-    username: null,
-    hash: null
-};
+let botInfo = { token: null, username: null, hash: null };
 
 function generateToken(userData, expiresIn = JWT_VERIFICATION_EXPIRY) {
     return jwt.sign(
@@ -55,18 +50,12 @@ function authenticateToken(req, res, next) {
     const token = authHeader && authHeader.split(' ')[1];
     
     if (!token) {
-        return res.status(401).json({
-            success: false,
-            error: 'NO_TOKEN'
-        });
+        return res.status(401).json({ success: false, error: 'NO_TOKEN' });
     }
     
     const decoded = verifyToken(token);
     if (!decoded) {
-        return res.status(403).json({
-            success: false,
-            error: 'INVALID_TOKEN'
-        });
+        return res.status(403).json({ success: false, error: 'INVALID_TOKEN' });
     }
     
     req.user = decoded;
@@ -82,12 +71,10 @@ function generateDeviceFingerprint(req) {
     const secChUaMobile = req.headers['sec-ch-ua-mobile'] || '';
     const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '';
     
-    const fingerprint = crypto
+    return crypto
         .createHash('sha256')
         .update(`${userAgent}|${acceptLanguage}|${acceptEncoding}|${secChUa}|${secChUaPlatform}|${secChUaMobile}|${ip}`)
         .digest('hex');
-    
-    return fingerprint;
 }
 
 function getBrowserInfo(req) {
@@ -196,95 +183,75 @@ function checkRateLimit(userId, maxAttempts = 3, windowMs = 300000) {
     return true;
 }
 
-async function sendTelegramMessage(userId, message) {
+// ===== SEND WEBHOOK TO BOT =====
+async function sendWebhookToBot(userId, status, title, message, errorType = null, deviceInfo = null) {
     try {
-        // Use bot token from URL params
-        const BOT_TOKEN = botInfo.token;
-        if (!BOT_TOKEN) {
-            console.log('Bot token not found in URL params.');
+        const botToken = botInfo.token;
+        if (!botToken) {
+            console.log('⚠️ No bot token available');
             return;
         }
         
-        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        const webhookData = {
+            userId: userId,
+            status: status,
+            title: title,
+            message: message,
+            timestamp: new Date().toISOString()
+        };
+        
+        if (errorType) webhookData.errorType = errorType;
+        if (deviceInfo) webhookData.deviceInfo = deviceInfo;
+        
+        console.log('📡 Sending Webhook:', webhookData);
+        
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        
+        let statusEmoji = 'ℹ️';
+        let statusText = 'INFO';
+        
+        if (status === 'success') {
+            statusEmoji = '✅';
+            statusText = 'SUCCESS';
+        } else if (status === 'error') {
+            statusEmoji = '❌';
+            statusText = 'ERROR';
+        }
+        
+        const botMessage = `${statusEmoji} <b>Webhook Response</b>
+
+<b>Status:</b> ${statusText}
+<b>User ID:</b> <code>${userId}</code>
+<b>Title:</b> ${title}
+<b>Message:</b> ${message}
+${errorType ? `<b>Error Type:</b> <code>${errorType}</code>` : ''}
+${deviceInfo ? `<b>Device:</b> ${deviceInfo.browser || 'N/A'} | ${deviceInfo.os || 'N/A'}` : ''}
+<b>Timestamp:</b> ${webhookData.timestamp}`;
+        
         await axios.post(url, {
             chat_id: userId,
-            text: message,
+            text: botMessage,
             parse_mode: 'HTML'
         });
+        
+        console.log('📡 Webhook sent to user:', userId);
+        
     } catch (error) {
-        console.error('Telegram message error:', error);
+        console.error('Send webhook error:', error);
     }
 }
 
-async function startVerificationProcess(sessionId, userId) {
-    try {
-        const steps = [
-            { delay: 2000, status: 'checking_device' },
-            { delay: 3000, status: 'analyzing_security' },
-            { delay: 2500, status: 'final_check' }
-        ];
-        
-        for (const step of steps) {
-            await new Promise(resolve => setTimeout(resolve, step.delay));
-            
-            if (userSessions.has(sessionId)) {
-                const session = userSessions.get(sessionId);
-                session.status = step.status;
-                userSessions.set(sessionId, session);
-            }
-        }
-        
-        const userIdStr = userId.toString();
-        if (!verifiedUsers.has(userIdStr)) {
-            verifiedUsers.add(userIdStr);
-            
-            if (userSessions.has(sessionId)) {
-                const session = userSessions.get(sessionId);
-                session.status = 'verified';
-                userSessions.set(sessionId, session);
-            }
-            
-            await sendTelegramMessage(userId, '✅ Your device has been verified successfully!');
-        }
-        
-    } catch (error) {
-        console.error('Start verification process error:', error);
-    }
-}
-
-// ==================== MIDDLEWARE: Extract Bot Info from URL ====================
-
+// ===== MIDDLEWARE =====
 app.use((req, res, next) => {
-    // Extract bot info from query parameters
     const query = req.query || {};
-    
-    if (query.botToken) {
-        botInfo.token = query.botToken;
-    }
-    if (query.bot) {
-        botInfo.username = query.bot;
-    }
-    if (query.botHash) {
-        botInfo.hash = query.botHash;
-    }
-    
-    // Also check from body if present
-    if (req.body && req.body.botToken) {
-        botInfo.token = req.body.botToken;
-    }
-    if (req.body && req.body.bot) {
-        botInfo.username = req.body.bot;
-    }
-    if (req.body && req.body.botHash) {
-        botInfo.hash = req.body.botHash;
-    }
-    
+    if (query.botToken) botInfo.token = query.botToken;
+    if (query.bot) botInfo.username = query.bot;
+    if (query.botHash) botInfo.hash = query.botHash;
     next();
 });
 
-// ==================== API ROUTES ====================
+// ===== API ROUTES =====
 
-// 1. Init Verification
 app.post('/init-verification', async (req, res) => {
     try {
         const { initData, botHash, bot, botToken } = req.body;
@@ -292,7 +259,6 @@ app.post('/init-verification', async (req, res) => {
         const ip = req.ip || req.connection.remoteAddress || req.headers['x-forwarded-for'] || '';
         const browserInfo = getBrowserInfo(req);
         
-        // Store bot info from request
         if (botToken) botInfo.token = botToken;
         if (bot) botInfo.username = bot;
         if (botHash) botInfo.hash = botHash;
@@ -300,62 +266,44 @@ app.post('/init-verification', async (req, res) => {
         const isVPN = await detectVPN(ip);
         if (isVPN) {
             vpnBlocklist.add(ip);
-            return res.status(403).json({
-                success: false,
-                error: 'VPN_USAGE_DETECTED'
-            });
+            await sendWebhookToBot('unknown', 'error', 'VPN Detected', 'VPN usage detected', 'VPN_USAGE_DETECTED', browserInfo);
+            return res.status(403).json({ success: false, error: 'VPN_USAGE_DETECTED', title: 'VPN Detected', message: 'VPN usage is not allowed.' });
         }
         
         if (!initData) {
-            return res.status(400).json({
-                success: false,
-                error: 'MISSING_INIT_DATA'
-            });
+            await sendWebhookToBot('unknown', 'error', 'Missing Data', 'No verification data found', 'MISSING_INIT_DATA', browserInfo);
+            return res.status(400).json({ success: false, error: 'MISSING_INIT_DATA', title: 'Missing Data', message: 'Missing required data.' });
         }
         
-        // Use bot token from URL params
         const botTokenToUse = botInfo.token || process.env.BOT_TOKEN;
         if (!botTokenToUse) {
-            return res.status(400).json({
-                success: false,
-                error: 'MISSING_BOT_TOKEN',
-                message: 'Bot token not found in URL parameters'
-            });
+            return res.status(400).json({ success: false, error: 'MISSING_BOT_TOKEN', title: 'Missing Bot Token', message: 'Bot token not found' });
         }
         
         const isValid = verifyTelegramHash(initData, botTokenToUse);
         if (!isValid) {
-            return res.status(403).json({
-                success: false,
-                error: 'INVALID_HASH'
-            });
+            await sendWebhookToBot('unknown', 'error', 'Invalid Hash', 'Hash verification failed', 'INVALID_HASH', browserInfo);
+            return res.status(403).json({ success: false, error: 'INVALID_HASH', title: 'Invalid Hash', message: 'Security verification failed.' });
         }
         
         const user = parseUserData(initData);
         if (!user || !user.id) {
-            return res.status(400).json({
-                success: false,
-                error: 'INVALID_USER_DATA'
-            });
+            await sendWebhookToBot('unknown', 'error', 'Invalid User', 'User data could not be parsed', 'INVALID_USER_DATA', browserInfo);
+            return res.status(400).json({ success: false, error: 'INVALID_USER_DATA', title: 'Invalid User', message: 'Invalid user data.' });
         }
         
         if (!checkRateLimit(user.id)) {
-            return res.status(429).json({
-                success: false,
-                error: 'RATE_LIMIT_EXCEEDED'
-            });
+            await sendWebhookToBot(user.id, 'error', 'Rate Limit Exceeded', 'Too many attempts', 'RATE_LIMIT_EXCEEDED', browserInfo);
+            return res.status(429).json({ success: false, error: 'RATE_LIMIT_EXCEEDED', title: 'Too Many Attempts', message: 'Please wait 5 minutes.' });
         }
         
         if (verifiedUsers.has(user.id.toString())) {
+            await sendWebhookToBot(user.id, 'info', 'Already Verified', 'User is already verified', null, browserInfo);
             const token = generateToken(user, 3600);
-            return res.json({
-                success: true,
-                status: 'already_verified',
-                user: user,
-                token: token
-            });
+            return res.json({ success: true, status: 'already_verified', user: user, token: token, title: 'Already Verified', message: 'You are already verified.' });
         }
         
+        // Different browser check
         if (userBrowserHistory.has(user.id.toString())) {
             const userBrowsers = userBrowserHistory.get(user.id.toString());
             const currentBrowserFingerprint = generateDeviceFingerprint(req);
@@ -369,28 +317,23 @@ app.post('/init-verification', async (req, res) => {
             }
             
             if (isDifferentBrowser) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'DIFFERENT_BROWSER_DETECTED'
-                });
+                await sendWebhookToBot(user.id, 'error', 'Different Browser', `User already verified using ${browserInfo.browser}`, 'DIFFERENT_BROWSER_DETECTED', browserInfo);
+                return res.status(403).json({ success: false, error: 'DIFFERENT_BROWSER_DETECTED', title: 'Different Browser', message: `You already verified using ${browserInfo.browser}.` });
             }
         }
         
+        // Same device different user check
         if (deviceFingerprints.has(deviceFingerprint)) {
             const existingData = deviceFingerprints.get(deviceFingerprint);
             
             if (existingData.userId !== user.id.toString()) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'DIFFERENT_USER_SAME_DEVICE'
-                });
+                await sendWebhookToBot(user.id, 'error', 'Different User', `Different user (ID: ${existingData.userId}) on same device`, 'DIFFERENT_USER_SAME_DEVICE', browserInfo);
+                return res.status(403).json({ success: false, error: 'DIFFERENT_USER_SAME_DEVICE', title: 'Different User', message: `Different user already verified from this device.` });
             }
             
             if (existingData.browser !== browserInfo.browser) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'SAME_DEVICE_DIFFERENT_BROWSER'
-                });
+                await sendWebhookToBot(user.id, 'error', 'Different Browser', `Same device different browser`, 'SAME_DEVICE_DIFFERENT_BROWSER', browserInfo);
+                return res.status(403).json({ success: false, error: 'SAME_DEVICE_DIFFERENT_BROWSER', title: 'Different Browser', message: `This device already verified using ${existingData.browser}.` });
             }
         }
         
@@ -432,6 +375,7 @@ app.post('/init-verification', async (req, res) => {
             deviceFingerprint: deviceFingerprint
         });
         
+        // Start verification process
         startVerificationProcess(sessionId, user.id);
         
         res.json({
@@ -441,42 +385,31 @@ app.post('/init-verification', async (req, res) => {
             userId: user.id,
             token: token,
             expiresIn: JWT_VERIFICATION_EXPIRY,
-            deviceInfo: {
-                browser: browserInfo.browser,
-                os: browserInfo.os
-            }
+            title: 'Verification Started',
+            message: 'Your device verification has been started.',
+            deviceInfo: { browser: browserInfo.browser, os: browserInfo.os }
         });
         
     } catch (error) {
         console.error('Init verification error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Please try again later.' });
     }
 });
 
-// 2. Check Status
 app.get('/check-status/:sessionId', authenticateToken, async (req, res) => {
     try {
         const { sessionId } = req.params;
         const deviceFingerprint = generateDeviceFingerprint(req);
         
         if (!sessionId || !userSessions.has(sessionId)) {
-            return res.status(404).json({
-                success: false,
-                error: 'SESSION_NOT_FOUND'
-            });
+            return res.status(404).json({ success: false, error: 'SESSION_NOT_FOUND', title: 'Session Not Found', message: 'Session not found.' });
         }
         
         const session = userSessions.get(sessionId);
         const userId = session.userId.toString();
         
         if (session.deviceFingerprint !== deviceFingerprint) {
-            return res.status(403).json({
-                success: false,
-                error: 'DEVICE_MISMATCH'
-            });
+            return res.status(403).json({ success: false, error: 'DEVICE_MISMATCH', title: 'Device Mismatch', message: 'Device mismatch detected.' });
         }
         
         if (verifiedUsers.has(userId)) {
@@ -492,39 +425,29 @@ app.get('/check-status/:sessionId', authenticateToken, async (req, res) => {
             firstName: session.firstName,
             lastName: session.lastName,
             isVerified: verifiedUsers.has(userId),
-            deviceInfo: {
-                browser: session.browser,
-                os: session.os
-            }
+            title: 'Status Check',
+            message: `Verification status: ${session.status}`,
+            deviceInfo: { browser: session.browser, os: session.os }
         });
         
     } catch (error) {
         console.error('Check status error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 3. Complete Verification
 app.post('/complete-verification', authenticateToken, async (req, res) => {
     try {
         const { userId, verified } = req.body;
         const userData = req.user;
+        const deviceInfo = getBrowserInfo(req);
         
         if (!userId) {
-            return res.status(400).json({
-                success: false,
-                error: 'MISSING_USER_ID'
-            });
+            return res.status(400).json({ success: false, error: 'MISSING_USER_ID', title: 'Missing User ID', message: 'User ID required.' });
         }
         
         if (userData.userId !== userId) {
-            return res.status(403).json({
-                success: false,
-                error: 'USER_ID_MISMATCH'
-            });
+            return res.status(403).json({ success: false, error: 'USER_ID_MISMATCH', title: 'User Mismatch', message: 'User ID mismatch.' });
         }
         
         if (verified) {
@@ -545,33 +468,29 @@ app.post('/complete-verification', authenticateToken, async (req, res) => {
                 deviceFingerprint: userData.deviceFingerprint || ''
             }, 86400);
             
-            await sendTelegramMessage(userId, '✅ Your device has been verified successfully!');
+            await sendWebhookToBot(userId, 'success', 'Verification Complete', 'Device verified successfully!', null, deviceInfo);
             
             res.json({
                 success: true,
+                status: 'success',
                 verified: true,
                 userId: userId,
                 token: newToken,
-                expiresIn: 86400
+                expiresIn: 86400,
+                title: 'Verification Complete',
+                message: 'Your device has been verified successfully!'
             });
         } else {
-            res.json({
-                success: true,
-                verified: false,
-                userId: userId
-            });
+            await sendWebhookToBot(userId, 'info', 'Verification Cancelled', 'User cancelled verification', null, deviceInfo);
+            res.json({ success: true, status: 'cancelled', verified: false, userId: userId, title: 'Verification Cancelled', message: 'Verification cancelled.' });
         }
         
     } catch (error) {
         console.error('Complete verification error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 4. User Profile
 app.get('/user-profile', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -593,60 +512,36 @@ app.get('/user-profile', authenticateToken, async (req, res) => {
             }
         }
         
-        res.json({
-            success: true,
-            user: userData,
-            isVerified: isVerified
-        });
+        res.json({ success: true, user: userData, isVerified: isVerified, title: 'User Profile', message: isVerified ? 'User is verified' : 'User is not verified' });
         
     } catch (error) {
         console.error('User profile error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 5. User Status
 app.get('/user-status/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const isVerified = verifiedUsers.has(userId);
-        
-        res.json({
-            success: true,
-            userId: userId,
-            isVerified: isVerified,
-            status: isVerified ? 'verified' : 'not_verified'
-        });
-        
+        res.json({ success: true, userId: userId, isVerified: isVerified, status: isVerified ? 'verified' : 'not_verified', title: 'User Status', message: isVerified ? 'User is verified' : 'User is not verified' });
     } catch (error) {
         console.error('User status error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 6. Admin: Verify User
 app.post('/admin/verify-user', async (req, res) => {
     try {
         const { userId, adminSecret } = req.body;
+        const deviceInfo = getBrowserInfo(req);
         
         if (adminSecret !== ADMIN_SECRET) {
-            return res.status(403).json({
-                success: false,
-                error: 'UNAUTHORIZED'
-            });
+            return res.status(403).json({ success: false, error: 'UNAUTHORIZED', title: 'Unauthorized', message: 'Unauthorized access.' });
         }
         
         if (!userId) {
-            return res.status(400).json({
-                success: false,
-                error: 'MISSING_USER_ID'
-            });
+            return res.status(400).json({ success: false, error: 'MISSING_USER_ID', title: 'Missing User ID', message: 'User ID required.' });
         }
         
         verifiedUsers.add(userId.toString());
@@ -658,24 +553,16 @@ app.post('/admin/verify-user', async (req, res) => {
             }
         }
         
-        await sendTelegramMessage(userId, '✅ Your account has been verified by admin!');
+        await sendWebhookToBot(userId, 'success', 'Admin Verification', 'User verified by admin', null, deviceInfo);
         
-        res.json({
-            success: true,
-            userId: userId,
-            status: 'verified'
-        });
+        res.json({ success: true, userId: userId, status: 'verified', title: 'User Verified', message: 'User has been verified successfully.' });
         
     } catch (error) {
         console.error('Admin verify error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 7. Admin: Get All Users
 app.get('/admin/users', async (req, res) => {
     try {
         const users = [];
@@ -693,201 +580,106 @@ app.get('/admin/users', async (req, res) => {
                 isVerified: verifiedUsers.has(session.userId.toString())
             });
         }
-        
-        res.json({
-            success: true,
-            totalUsers: users.length,
-            verifiedCount: verifiedUsers.size,
-            users: users
-        });
-        
+        res.json({ success: true, totalUsers: users.length, verifiedCount: verifiedUsers.size, users: users, title: 'All Users', message: 'Users list retrieved successfully.' });
     } catch (error) {
         console.error('Admin users error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 8. Admin: Clear Data
 app.delete('/admin/clear-data', async (req, res) => {
     try {
         const { adminSecret } = req.body;
-        
         if (adminSecret !== ADMIN_SECRET) {
-            return res.status(403).json({
-                success: false,
-                error: 'UNAUTHORIZED'
-            });
+            return res.status(403).json({ success: false, error: 'UNAUTHORIZED', title: 'Unauthorized', message: 'Unauthorized access.' });
         }
-        
         userSessions.clear();
         verifiedUsers.clear();
         deviceFingerprints.clear();
         userBrowserHistory.clear();
         vpnBlocklist.clear();
         rateLimiter.clear();
-        
-        res.json({
-            success: true,
-            message: 'All data cleared successfully'
-        });
-        
+        res.json({ success: true, title: 'Data Cleared', message: 'All data cleared successfully.' });
     } catch (error) {
         console.error('Clear data error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 9. Admin: Clear Sessions
 app.delete('/admin/clear-sessions', async (req, res) => {
     try {
         const { adminSecret } = req.body;
-        
         if (adminSecret !== ADMIN_SECRET) {
-            return res.status(403).json({
-                success: false,
-                error: 'UNAUTHORIZED'
-            });
+            return res.status(403).json({ success: false, error: 'UNAUTHORIZED', title: 'Unauthorized', message: 'Unauthorized access.' });
         }
-        
         userSessions.clear();
         rateLimiter.clear();
-        
-        res.json({
-            success: true,
-            message: 'All sessions cleared'
-        });
-        
+        res.json({ success: true, title: 'Sessions Cleared', message: 'All sessions cleared.' });
     } catch (error) {
         console.error('Clear sessions error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 10. Admin: View Tokens
 app.get('/admin/tokens', async (req, res) => {
     try {
         const tokens = [];
         for (const [sid, session] of userSessions) {
-            tokens.push({
-                userId: session.userId,
-                sessionId: sid,
-                status: session.status,
-                createdAt: new Date(session.createdAt).toISOString()
-            });
+            tokens.push({ userId: session.userId, sessionId: sid, status: session.status, createdAt: new Date(session.createdAt).toISOString() });
         }
-        
-        res.json({
-            success: true,
-            totalTokens: tokens.length,
-            tokens: tokens
-        });
-        
+        res.json({ success: true, totalTokens: tokens.length, tokens: tokens, title: 'Tokens List', message: 'Tokens retrieved successfully.' });
     } catch (error) {
         console.error('Admin tokens error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'INTERNAL_SERVER_ERROR'
-        });
+        res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR', title: 'Server Error', message: 'Server error.' });
     }
 });
 
-// 11. Webhook Endpoint
 app.post('/webhook', async (req, res) => {
     try {
         const { userId, status, title, message, errorType, deviceInfo, timestamp } = req.body;
+        console.log('📡 Webhook Received:', { userId, status, title, message });
         
-        console.log('📡 Webhook Received:');
-        console.log('   User:', userId);
-        console.log('   Status:', status);
-        console.log('   Title:', title);
-        console.log('   Message:', message);
-        console.log('   Error Type:', errorType || 'N/A');
-        console.log('   Device:', deviceInfo);
-        console.log('   Timestamp:', timestamp || new Date().toISOString());
-        
-        // Forward to Telegram bot using token from URL params
         if (botInfo.token) {
-            await sendWebhookToBot(userId, status, title, message, errorType);
-        } else {
-            console.log('⚠️ No bot token available for webhook forwarding');
+            await sendWebhookToBot(userId, status, title, message, errorType, deviceInfo);
         }
         
-        res.json({
-            success: true,
-            message: 'Webhook received successfully',
-            received: { userId, status, title }
-        });
-        
+        res.json({ success: true, message: 'Webhook received successfully', received: { userId, status, title } });
     } catch (error) {
         console.error('Webhook error:', error);
-        res.status(500).json({
-            success: false,
-            error: 'WEBHOOK_ERROR',
-            message: 'Failed to process webhook'
-        });
+        res.status(500).json({ success: false, error: 'WEBHOOK_ERROR', title: 'Webhook Error', message: 'Failed to process webhook' });
     }
 });
 
-// ===== SEND WEBHOOK TO TELEGRAM BOT =====
-async function sendWebhookToBot(userId, status, title, message, errorType) {
+async function startVerificationProcess(sessionId, userId) {
     try {
-        const botToken = botInfo.token;
-        if (!botToken) return;
+        const steps = [
+            { delay: 2000, status: 'checking_device' },
+            { delay: 3000, status: 'analyzing_security' },
+            { delay: 2500, status: 'final_check' }
+        ];
         
-        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-        
-        let statusEmoji = 'ℹ️';
-        let statusText = 'INFO';
-        
-        if (status === 'success') {
-            statusEmoji = '✅';
-            statusText = 'SUCCESS';
-        } else if (status === 'error') {
-            statusEmoji = '❌';
-            statusText = 'ERROR';
+        for (const step of steps) {
+            await new Promise(resolve => setTimeout(resolve, step.delay));
+            if (userSessions.has(sessionId)) {
+                const session = userSessions.get(sessionId);
+                session.status = step.status;
+                userSessions.set(sessionId, session);
+            }
         }
         
-        const text = `${statusEmoji} <b>Webhook Response</b>
-
-<b>Status:</b> ${statusText}
-<b>User ID:</b> <code>${userId}</code>
-<b>Title:</b> ${title}
-<b>Message:</b> ${message}
-${errorType ? `<b>Error Type:</b> <code>${errorType}</code>` : ''}
-<b>Timestamp:</b> ${new Date().toISOString()}`;
-        
-        await axios.post(url, {
-            chat_id: userId,
-            text: text,
-            parse_mode: 'HTML'
-        });
-        
-        console.log('📡 Webhook forwarded to bot for user:', userId);
-        
+        const userIdStr = userId.toString();
+        if (!verifiedUsers.has(userIdStr)) {
+            verifiedUsers.add(userIdStr);
+            if (userSessions.has(sessionId)) {
+                const session = userSessions.get(sessionId);
+                session.status = 'verified';
+                userSessions.set(sessionId, session);
+            }
+            await sendWebhookToBot(userId, 'success', 'Verification Complete', 'Device verified successfully!', null, { browser: 'Auto', os: 'System' });
+        }
     } catch (error) {
-        console.error('Forward webhook to bot error:', error);
+        console.error('Start verification process error:', error);
     }
 }
-
-// ==================== GET BOT INFO ====================
-app.get('/bot-info', (req, res) => {
-    res.json({
-        success: true,
-        bot: {
-            username: botInfo.username || null,
-            hash: botInfo.hash || null,
-            token: botInfo.token ? '***PRESENT***' : null
-        }
-    });
-});
 
 module.exports = app;
