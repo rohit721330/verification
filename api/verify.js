@@ -4,7 +4,6 @@ const crypto = require('crypto');
 
 const app = express();
 
-// CORS সেট করুন
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -37,7 +36,7 @@ function getBrowserInfo(req) {
     else if (userAgent.includes('Android')) os = 'Android';
     else if (userAgent.includes('iOS')) os = 'iOS';
     
-    return { browser, os };
+    return { browser: browser, os: os };
 }
 
 function parseUserData(initData) {
@@ -53,8 +52,8 @@ function parseUserData(initData) {
     }
 }
 
-function createWebhookResponse(userId, status, title, message, errorType = null, deviceInfo = null) {
-    const webhookData = {
+function createWebhookResponse(userId, status, title, message, errorType, deviceInfo) {
+    var webhookData = {
         userId: userId,
         status: status,
         title: title,
@@ -63,22 +62,24 @@ function createWebhookResponse(userId, status, title, message, errorType = null,
     };
     if (errorType) webhookData.errorType = errorType;
     if (deviceInfo) webhookData.deviceInfo = deviceInfo;
-    console.log('📡 Webhook Data:', JSON.stringify(webhookData, null, 2));
+    console.log('Webhook Data:', JSON.stringify(webhookData, null, 2));
     return webhookData;
 }
 
-// ==================== API ROUTES (সঠিকভাবে /api/ দিয়ে) ====================
+// ==================== API ROUTES ====================
 
 // 1. Init Verification
-app.post('/api/init-verification', async (req, res) => {
+app.post('/api/init-verification', async function(req, res) {
     try {
-        const { initData, botHash, bot } = req.body;
-        const browserInfo = getBrowserInfo(req);
+        var initData = req.body.initData;
+        var botHash = req.body.botHash;
+        var bot = req.body.bot;
+        var browserInfo = getBrowserInfo(req);
         
-        console.log('📥 Init Verification Request:', { botHash, bot, hasInitData: !!initData });
+        console.log('Init Verification Request:', { botHash: botHash, bot: bot, hasInitData: !!initData });
         
         if (!initData) {
-            const webhookData = createWebhookResponse(
+            var webhookData = createWebhookResponse(
                 'unknown',
                 'error',
                 'Missing Data',
@@ -95,9 +96,9 @@ app.post('/api/init-verification', async (req, res) => {
             });
         }
         
-        const user = parseUserData(initData);
+        var user = parseUserData(initData);
         if (!user || !user.id) {
-            const webhookData = createWebhookResponse(
+            var webhookData = createWebhookResponse(
                 'unknown',
                 'error',
                 'Invalid User',
@@ -114,31 +115,36 @@ app.post('/api/init-verification', async (req, res) => {
             });
         }
         
-        console.log('👤 User:', user.id, user.first_name);
+        console.log('User:', user.id, user.first_name);
         
-        const userIdStr = user.id.toString();
-        const isVerified = verifiedUsers.has(userIdStr);
+        var userIdStr = user.id.toString();
+        var isVerified = verifiedUsers.has(userIdStr);
+        
+        console.log('User ' + userIdStr + ' verified status: ' + isVerified);
         
         if (isVerified) {
-            const webhookData = createWebhookResponse(
+            console.log('User already verified, sending info response');
+            
+            var webhookData = createWebhookResponse(
                 userIdStr,
                 'info',
                 'Already Verified',
-                'User is already verified in the system',
+                'You are already verified in our system.',
                 null,
                 browserInfo
             );
-            return res.json({
+            
+            return res.status(200).json({
                 success: true,
                 status: 'already_verified',
                 user: user,
                 title: 'Already Verified',
-                message: 'You are already verified.',
+                message: 'You are already verified in our system.',
                 webhook: webhookData
             });
         }
         
-        const sessionId = crypto.randomBytes(32).toString('hex');
+        var sessionId = crypto.randomBytes(32).toString('hex');
         
         userSessions.set(sessionId, {
             userId: user.id,
@@ -153,17 +159,17 @@ app.post('/api/init-verification', async (req, res) => {
             os: browserInfo.os
         });
         
-        console.log('✅ Session created:', sessionId);
+        console.log('Session created:', sessionId);
         
-        // Auto-verify after 5 seconds (demo)
-        setTimeout(async () => {
+        // Auto-verify after 5 seconds
+        setTimeout(function() {
             if (userSessions.has(sessionId)) {
-                const session = userSessions.get(sessionId);
+                var session = userSessions.get(sessionId);
                 session.status = 'verified';
                 userSessions.set(sessionId, session);
                 verifiedUsers.add(userIdStr);
                 
-                const webhookData = createWebhookResponse(
+                var webhookData = createWebhookResponse(
                     userIdStr,
                     'success',
                     'Verification Complete',
@@ -171,12 +177,12 @@ app.post('/api/init-verification', async (req, res) => {
                     null,
                     browserInfo
                 );
-                console.log('✅ User verified:', userIdStr);
-                console.log('📡 Webhook Response:', JSON.stringify(webhookData, null, 2));
+                console.log('User verified:', userIdStr);
+                console.log('Webhook Response:', JSON.stringify(webhookData, null, 2));
             }
         }, 5000);
         
-        const webhookData = createWebhookResponse(
+        var webhookData = createWebhookResponse(
             user.id,
             'pending',
             'Verification Started',
@@ -201,7 +207,7 @@ app.post('/api/init-verification', async (req, res) => {
         
     } catch (error) {
         console.error('Init verification error:', error);
-        const webhookData = createWebhookResponse(
+        var webhookData = createWebhookResponse(
             'unknown',
             'error',
             'Server Error',
@@ -220,11 +226,11 @@ app.post('/api/init-verification', async (req, res) => {
 });
 
 // 2. Check Status
-app.get('/api/check-status/:sessionId', async (req, res) => {
+app.get('/api/check-status/:sessionId', async function(req, res) {
     try {
-        const { sessionId } = req.params;
+        var sessionId = req.params.sessionId;
         
-        console.log('📊 Check Status:', sessionId);
+        console.log('Check Status:', sessionId);
         
         if (!sessionId || !userSessions.has(sessionId)) {
             return res.status(404).json({
@@ -235,8 +241,8 @@ app.get('/api/check-status/:sessionId', async (req, res) => {
             });
         }
         
-        const session = userSessions.get(sessionId);
-        const userId = session.userId.toString();
+        var session = userSessions.get(sessionId);
+        var userId = session.userId.toString();
         
         if (verifiedUsers.has(userId)) {
             session.status = 'verified';
@@ -252,7 +258,7 @@ app.get('/api/check-status/:sessionId', async (req, res) => {
             lastName: session.lastName,
             isVerified: verifiedUsers.has(userId),
             title: 'Status Check',
-            message: `Verification status: ${session.status}`,
+            message: 'Verification status: ' + session.status,
             deviceInfo: {
                 browser: session.browser,
                 os: session.os
@@ -271,12 +277,13 @@ app.get('/api/check-status/:sessionId', async (req, res) => {
 });
 
 // 3. Complete Verification
-app.post('/api/complete-verification', async (req, res) => {
+app.post('/api/complete-verification', async function(req, res) {
     try {
-        const { userId, verified } = req.body;
-        const browserInfo = getBrowserInfo(req);
+        var userId = req.body.userId;
+        var verified = req.body.verified;
+        var browserInfo = getBrowserInfo(req);
         
-        console.log('✅ Complete Verification:', userId, verified);
+        console.log('Complete Verification:', userId, verified);
         
         if (!userId) {
             return res.status(400).json({
@@ -290,14 +297,14 @@ app.post('/api/complete-verification', async (req, res) => {
         if (verified) {
             verifiedUsers.add(userId.toString());
             
-            for (const [sid, session] of userSessions) {
+            for (var [sid, session] of userSessions) {
                 if (session.userId.toString() === userId.toString()) {
                     session.status = 'verified';
                     userSessions.set(sid, session);
                 }
             }
             
-            const webhookData = createWebhookResponse(
+            var webhookData = createWebhookResponse(
                 userId,
                 'success',
                 'Verification Complete',
@@ -316,7 +323,7 @@ app.post('/api/complete-verification', async (req, res) => {
                 webhook: webhookData
             });
         } else {
-            const webhookData = createWebhookResponse(
+            var webhookData = createWebhookResponse(
                 userId,
                 'info',
                 'Verification Cancelled',
@@ -347,10 +354,10 @@ app.post('/api/complete-verification', async (req, res) => {
 });
 
 // 4. User Status
-app.get('/api/user-status/:userId', async (req, res) => {
+app.get('/api/user-status/:userId', async function(req, res) {
     try {
-        const { userId } = req.params;
-        const isVerified = verifiedUsers.has(userId);
+        var userId = req.params.userId;
+        var isVerified = verifiedUsers.has(userId);
         
         res.json({
             success: true,
@@ -373,9 +380,12 @@ app.get('/api/user-status/:userId', async (req, res) => {
 });
 
 // 5. Bot Register
-app.get('/api/bot_register', (req, res) => {
-    const { botHash, bot, webhook_url, bot_token } = req.query;
-    console.log('📝 Bot Register:', { botHash, bot, webhook_url, bot_token: bot_token ? '***' : 'missing' });
+app.get('/api/bot_register', function(req, res) {
+    var botHash = req.query.botHash;
+    var bot = req.query.bot;
+    var webhook_url = req.query.webhook_url;
+    var bot_token = req.query.bot_token;
+    console.log('Bot Register:', { botHash: botHash, bot: bot, webhook_url: webhook_url, bot_token: bot_token ? '***' : 'missing' });
     
     res.json({
         success: true,
@@ -387,7 +397,7 @@ app.get('/api/bot_register', (req, res) => {
 });
 
 // 6. Health Check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', function(req, res) {
     res.json({
         success: true,
         status: 'healthy',
