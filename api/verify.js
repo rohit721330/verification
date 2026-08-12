@@ -1,10 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const axios = require('axios');
 
 const app = express();
-app.use(cors());
+
+// CORS সেট করুন
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -47,9 +53,6 @@ function parseUserData(initData) {
     }
 }
 
-// ==================== WEBHOOK FUNCTIONS ====================
-
-// ওয়েবহুক ডেটা তৈরি করা (JSON রেসপন্স)
 function createWebhookResponse(userId, status, title, message, errorType = null, deviceInfo = null) {
     const webhookData = {
         userId: userId,
@@ -58,18 +61,16 @@ function createWebhookResponse(userId, status, title, message, errorType = null,
         message: message,
         timestamp: new Date().toISOString()
     };
-    
     if (errorType) webhookData.errorType = errorType;
     if (deviceInfo) webhookData.deviceInfo = deviceInfo;
-    
     console.log('📡 Webhook Data:', JSON.stringify(webhookData, null, 2));
     return webhookData;
 }
 
-// ==================== API ROUTES ====================
+// ==================== API ROUTES (সঠিকভাবে /api/ দিয়ে) ====================
 
 // 1. Init Verification
-app.post('/init-verification', async (req, res) => {
+app.post('/api/init-verification', async (req, res) => {
     try {
         const { initData, botHash, bot } = req.body;
         const browserInfo = getBrowserInfo(req);
@@ -115,7 +116,6 @@ app.post('/init-verification', async (req, res) => {
         
         console.log('👤 User:', user.id, user.first_name);
         
-        // Check if already verified
         const userIdStr = user.id.toString();
         const isVerified = verifiedUsers.has(userIdStr);
         
@@ -128,7 +128,6 @@ app.post('/init-verification', async (req, res) => {
                 null,
                 browserInfo
             );
-            
             return res.json({
                 success: true,
                 status: 'already_verified',
@@ -139,7 +138,6 @@ app.post('/init-verification', async (req, res) => {
             });
         }
         
-        // Create session
         const sessionId = crypto.randomBytes(32).toString('hex');
         
         userSessions.set(sessionId, {
@@ -157,7 +155,7 @@ app.post('/init-verification', async (req, res) => {
         
         console.log('✅ Session created:', sessionId);
         
-        // Start verification process (auto-verify for demo)
+        // Auto-verify after 5 seconds (demo)
         setTimeout(async () => {
             if (userSessions.has(sessionId)) {
                 const session = userSessions.get(sessionId);
@@ -173,7 +171,6 @@ app.post('/init-verification', async (req, res) => {
                     null,
                     browserInfo
                 );
-                
                 console.log('✅ User verified:', userIdStr);
                 console.log('📡 Webhook Response:', JSON.stringify(webhookData, null, 2));
             }
@@ -223,7 +220,7 @@ app.post('/init-verification', async (req, res) => {
 });
 
 // 2. Check Status
-app.get('/check-status/:sessionId', async (req, res) => {
+app.get('/api/check-status/:sessionId', async (req, res) => {
     try {
         const { sessionId } = req.params;
         
@@ -274,7 +271,7 @@ app.get('/check-status/:sessionId', async (req, res) => {
 });
 
 // 3. Complete Verification
-app.post('/complete-verification', async (req, res) => {
+app.post('/api/complete-verification', async (req, res) => {
     try {
         const { userId, verified } = req.body;
         const browserInfo = getBrowserInfo(req);
@@ -350,7 +347,7 @@ app.post('/complete-verification', async (req, res) => {
 });
 
 // 4. User Status
-app.get('/user-status/:userId', async (req, res) => {
+app.get('/api/user-status/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
         const isVerified = verifiedUsers.has(userId);
@@ -375,18 +372,7 @@ app.get('/user-status/:userId', async (req, res) => {
     }
 });
 
-// 5. Health Check
-app.get('/health', (req, res) => {
-    res.json({
-        success: true,
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        verifiedCount: verifiedUsers.size,
-        sessionCount: userSessions.size
-    });
-});
-
-// 6. Bot Register (for bot registration)
+// 5. Bot Register
 app.get('/api/bot_register', (req, res) => {
     const { botHash, bot, webhook_url, bot_token } = req.query;
     console.log('📝 Bot Register:', { botHash, bot, webhook_url, bot_token: bot_token ? '***' : 'missing' });
@@ -397,6 +383,17 @@ app.get('/api/bot_register', (req, res) => {
         botHash: botHash,
         bot: bot,
         webhook_url: webhook_url
+    });
+});
+
+// 6. Health Check
+app.get('/api/health', (req, res) => {
+    res.json({
+        success: true,
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        verifiedCount: verifiedUsers.size,
+        sessionCount: userSessions.size
     });
 });
 
