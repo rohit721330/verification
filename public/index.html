@@ -502,17 +502,26 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     console.log('Init result:', result);
     
+    // =============================================
+    // ✅ FIX: Check for already_verified FIRST
+    // =============================================
     if (result.success && result.status === 'already_verified') {
         console.log('User already verified, showing Already Verified page');
         showAlreadyVerifiedPage();
         return;
     }
     
+    // =============================================
+    // ❌ Error handling
+    // =============================================
     if (!result.success) {
         showFailedPage(result.error, result.message || 'Verification initialization failed.');
         return;
     }
     
+    // =============================================
+    // ✅ Pending - start progress
+    // =============================================
     if (result.status === 'pending' && result.sessionId) {
         startProgress();
         
