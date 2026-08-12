@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,6 +15,11 @@ app.get('/', (req, res) => {
 
 // API Routes
 app.use('/api', require('./api/verify'));
+
+// Health Check
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Fallback
 app.get('*', (req, res) => {
