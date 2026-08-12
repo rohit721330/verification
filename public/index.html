@@ -267,4 +267,272 @@ function showPage(pageId) {
 
 function updateStatus(text, badgeText) {
     var statusMsg = document.getElementById('statusMessage');
-    if (statusMsg) statusMsg
+    if (statusMsg) statusMsg.textContent = text;
+    if (badgeText) document.getElementById('statusText').textContent = badgeText;
+}
+
+function updateProgress(value) {
+    var bar = document.getElementById('progressBar');
+    var percent = document.getElementById('percentText');
+    if (bar) bar.style.width = value + '%';
+    if (percent) percent.textContent = value + '%';
+}
+
+// ==================== API FUNCTIONS ====================
+
+async function initVerification(initData, botHash, bot) {
+    try {
+        console.log('Sending init request...');
+        var response = await fetch('/api/init-verification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: initData, botHash: botHash, bot: bot })
+        });
+        var data = await response.json();
+        console.log('Init response:', data);
+        
+        if (data.webhook) {
+            console.log('Webhook Data:', data.webhook);
+            updateWebhookStatus(data.webhook);
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('Init error:', error);
+        return { success: false, error: 'NETWORK_ERROR', message: 'Network error. Please check your connection.' };
+    }
+}
+
+async function checkStatus(sessionId) {
+    try {
+        var response = await fetch('/api/check-status/' + sessionId);
+        var data = await response.json();
+        console.log('Status response:', data);
+        return data;
+    } catch (error) {
+        console.error('Status error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function completeVerification(sessionId) {
+    try {
+        var response = await fetch('/api/complete-verification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user ? user.id : null, verified: true })
+        });
+        var data = await response.json();
+        if (data.webhook) {
+            console.log('Webhook Data:', data.webhook);
+            updateWebhookStatus(data.webhook);
+        }
+        return data;
+    } catch (error) {
+        console.error('Complete error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+function updateWebhookStatus(webhookData) {
+    var statusMap = {
+        'success': 'webhookSuccessStatus',
+        'error': 'webhookFailStatus',
+        'info': 'webhookAlreadyStatus',
+        'pending': 'webhookErrorStatus'
+    };
+    
+    var elId = statusMap[webhookData.status];
+    if (elId) {
+        var el = document.getElementById(elId);
+        if (el) {
+            var icon = webhookData.status === 'success' ? '<i class="fas fa-check-circle"></i>' : 
+                          webhookData.status === 'error' ? '<i class="fas fa-times-circle"></i>' : 
+                          webhookData.status === 'info' ? '<i class="fas fa-info-circle"></i>' : '<i class="fas fa-bolt"></i>';
+            el.innerHTML = '<i class="fas fa-bolt"></i> Webhook: <span class="sent">' + icon + ' ' + webhookData.status.toUpperCase() + ' Response Ready</span>';
+        }
+    }
+}
+
+// ==================== SCANNER PROGRESS ====================
+
+var steps = [
+    { value: 10, text: 'Establishing secure handshake...', detail: 'Connecting to secure server...' },
+    { value: 30, text: 'Analyzing device integrity...', detail: 'Checking device fingerprints...' },
+    { value: 55, text: 'Verifying security parameters...', detail: 'Running security checks...' },
+    { value: 80, text: 'Finalizing verification...', detail: 'Almost done...' },
+    { value: 100, text: 'Verification Complete!', detail: 'Verified successfully!' }
+];
+
+var stepIndex = 0;
+var progressInterval = null;
+
+function startProgress() {
+    stepIndex = 0;
+    updateProgress(10);
+    updateStatus('Establishing secure handshake...', 'SCANNING');
+    document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>Connecting to secure server...</span>';
+    
+    progressInterval = setInterval(function() {
+        stepIndex++;
+        if (stepIndex < steps.length) {
+            var step = steps[stepIndex];
+            updateProgress(step.value);
+            updateStatus(step.text, 'SCANNING');
+            document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>' + step.detail + '</span>';
+        } else {
+            clearInterval(progressInterval);
+            setTimeout(function() { showSuccessPage(); }, 800);
+        }
+    }, 1800);
+}
+
+// ==================== RESULT PAGES ====================
+
+function showSuccessPage() {
+    showPage('pageSuccess');
+    document.getElementById('statusText').textContent = 'VERIFIED';
+    document.getElementById('statusBadge').style.borderColor = '#00ffa3';
+    document.getElementById('statusBadge').style.color = '#00ffa3';
+    document.getElementById('statusBadge').style.background = 'rgba(0,255,163,0.1)';
+    
+    if (user) {
+        document.getElementById('successUserId').textContent = user.id || '-';
+        document.getElementById('successDevice').textContent = navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop';
+        document.getElementById('successBrowser').textContent = navigator.userAgent.split(' ').pop() || '-';
+        document.getElementById('successTime').textContent = new Date().toLocaleTimeString();
+    }
+}
+
+function showFailedPage(errorCode, message) {
+    showPage('pageFailed');
+    document.getElementById('statusText').textContent = 'FAILED';
+    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
+    document.getElementById('statusBadge').style.color = '#ff4d4d';
+    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
+    
+    document.getElementById('failMessage').textContent = message || 'Something went wrong.';
+    document.getElementById('failCode').textContent = errorCode || 'UNKNOWN';
+    
+    var reasons = {
+        'MISSING_INIT_DATA': 'Missing verification data. Please use the link from the bot.',
+        'INVALID_USER_DATA': 'Invalid user data. Please try again.',
+        'NETWORK_ERROR': 'Network error. Please check your internet connection.',
+        'INTERNAL_SERVER_ERROR': 'Server error. Please try again later.',
+        'SESSION_NOT_FOUND': 'Session expired. Please start again with /verify.',
+        'RATE_LIMIT_EXCEEDED': 'Too many attempts. Please wait 5 minutes.'
+    };
+    document.getElementById('failReason').textContent = reasons[errorCode] || 'Unknown error occurred. Please try again.';
+}
+
+function showAlreadyVerifiedPage() {
+    showPage('pageAlready');
+    document.getElementById('statusText').textContent = 'ACTIVE';
+    document.getElementById('statusBadge').style.borderColor = '#3b82f6';
+    document.getElementById('statusBadge').style.color = '#3b82f6';
+    document.getElementById('statusBadge').style.background = 'rgba(59,130,246,0.1)';
+    
+    if (user) {
+        document.getElementById('alreadyUserId').textContent = user.id || '-';
+    }
+}
+
+function showErrorPage(missingParams) {
+    showPage('pageError');
+    document.getElementById('statusText').textContent = 'ERROR';
+    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
+    document.getElementById('statusBadge').style.color = '#ff4d4d';
+    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
+    
+    var message = '';
+    var missingList = missingParams.join(', ');
+    
+    if (missingParams.length === 3) {
+        message = 'No verification parameters found. Please use the link from the bot.';
+    } else if (missingParams.length > 0) {
+        message = 'Missing required parameters: ' + missingList;
+    } else {
+        message = 'Invalid or corrupted verification data.';
+    }
+    
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('missingParams').textContent = missingList || 'All parameters are corrupted';
+}
+
+// ==================== ACTIONS ====================
+
+function closeApp() {
+    if (typeof tg !== 'undefined' && tg.close) tg.close();
+    else window.close();
+}
+
+function retryVerification() { window.location.reload(); }
+
+// ==================== MAIN INITIALIZATION ====================
+
+document.addEventListener('DOMContentLoaded', async function() {
+    console.log('App Loaded');
+    console.log('URL Params:', urlParams);
+    
+    // Step 1: Validate Parameters
+    var validation = validateParams(urlParams);
+    
+    if (!validation.isValid) {
+        showErrorPage(validation.missing);
+        return;
+    }
+    
+    // Step 2: Parse User Data
+    var userParsed = parseUserData();
+    if (!userParsed || !user) {
+        showErrorPage(['User data could not be parsed']);
+        return;
+    }
+    
+    // Step 3: Display User Info
+    displayUserInfo();
+    console.log('User:', user);
+    
+    // Step 4: Initialize Verification
+    var result = await initVerification(
+        urlParams.tgWebAppData,
+        urlParams.botHash || null,
+        urlParams.bot || null
+    );
+    
+    console.log('Init result:', result);
+    
+    if (result.success && result.status === 'already_verified') {
+        console.log('User already verified, showing Already Verified page');
+        showAlreadyVerifiedPage();
+        return;
+    }
+    
+    if (!result.success) {
+        showFailedPage(result.error, result.message || 'Verification initialization failed.');
+        return;
+    }
+    
+    if (result.status === 'pending' && result.sessionId) {
+        startProgress();
+        
+        var interval = setInterval(async function() {
+            var status = await checkStatus(result.sessionId);
+            
+            if (status.success && status.status === 'verified') {
+                clearInterval(interval);
+                await completeVerification(result.sessionId);
+            } else if (status.status === 'failed') {
+                clearInterval(interval);
+                showFailedPage('VERIFICATION_FAILED', 'Verification process failed.');
+            }
+        }, 2000);
+    } else {
+        showFailedPage('UNKNOWN', 'Unexpected response from server.');
+    }
+});
+
+console.log('Verification App Loaded');
+</script>
+</body>
+</html>
