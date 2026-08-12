@@ -1,7 +1,7 @@
 {
   "name": "verification-system",
   "version": "1.0.0",
-  "description": "Telegram Web App verification system",
+  "description": "Telegram Web App verification system with JWT and admin panel",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
