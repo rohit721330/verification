@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Verification</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+        body{min-height:100vh;background:#0a0a1a;display:flex;justify-content:center;align-items:center;padding:20px}
+        .container{max-width:420px;width:100%;background:linear-gradient(145deg,#141430,#0d0d1f);border-radius:24px;padding:30px 24px;border:1px solid #2a2a5e;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+        .header{display:flex;align-items:center;gap:14px;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid #1a1a3e}
+        .avatar{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2a2a5e,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:bold;color:#fff;flex-shrink:0;overflow:hidden}
+        .avatar img{width:100%;height:100%;object-fit:cover}
+        .user-info{flex:1;min-width:0}
+        .user-info .name{font-size:17px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .user-info .id{font-size:13px;color:#8888aa}
+        .status-badge{padding:4px 14px;border-radius:20px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;background:#171D3D;color:#86A3D8;border:1px solid #2a2a5e;display:flex;align-items:center;gap:6px}
+        .status-badge .dot{width:7px;height:7px;border-radius:50%;background:#2C62C8;animation:blink 1.5s infinite}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+        .error-icon{font-size:64px;margin-bottom:16px}
+        .error-title{font-size:24px;font-weight:700;color:#ff4d4d;margin-bottom:8px}
+        .error-desc{font-size:14px;color:#8888aa;margin-bottom:20px;line-height:1.6}
+        .error-details{background:#0d0d2a;border-radius:12px;padding:16px;margin-bottom:20px;text-align:left;border:1px solid #1a1a3e}
+        .error-details .row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #0a0a1a}
+        .error-details .row:last-child{border-bottom:none}
+        .error-details .label{color:#6666aa}
+        .error-details .value{color:#ff6b6b;font-weight:500;word-break:break-all}
+        .error-details .value.missing{color:#ffaa00}
+        .error-details .value.present{color:#00ffa3}
+        .scanner-section{display:flex;justify-content:center;margin:20px 0 30px}
+        .scanner{position:relative;width:160px;height:160px}
+        .ring-outer{position:absolute;inset:0;border-radius:50%;border:3px solid #2a4a7a;animation:spin 8s linear infinite}
+        .ring-outer::before{content:'';position:absolute;width:8px;height:8px;background:#3b82f6;border-radius:50%;top:-4px;left:50%;transform:translateX(-50%);box-shadow:0 0 20px #3b82f6}
+        .ring-inner{position:absolute;inset:12px;border-radius:50%;border:3px solid #1a3a6a;animation:spin-reverse 6s linear infinite}
+        .ring-inner::before{content:'';position:absolute;width:6px;height:6px;background:#3b82f6;border-radius:50%;bottom:-3px;left:50%;transform:translateX(-50%);box-shadow:0 0 15px #3b82f6}
+        .scanner-icon{position:absolute;inset:30px;border-radius:50%;background:#0a0a2a;display:flex;align-items:center;justify-content:center;font-size:48px;border:2px solid #1a3a6a}
+        .scanner-icon img{width:50px;height:50px;border-radius:12px}
+        .scan-line{position:absolute;left:10%;right:10%;height:2px;background:linear-gradient(90deg,transparent,#3b82f6,transparent);top:20%;animation:scan 2s ease-in-out infinite;filter:blur(4px);opacity:0.6}
+        @keyframes scan{0%{top:10%;opacity:0}10%{opacity:0.6}90%{opacity:0.6}100%{top:90%;opacity:0}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes spin-reverse{to{transform:rotate(-360deg)}}
+        .content{text-align:center}
+        .content h1{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px}
+        .content .subtitle{font-size:14px;color:#8888aa;margin-bottom:24px;line-height:1.5}
+        .progress-wrap{width:100%;background:#1a1a3e;border-radius:8px;height:6px;overflow:hidden;margin-bottom:10px}
+        .progress-bar{height:100%;width:10%;background:linear-gradient(90deg,#3b82f6,#00ffa3);border-radius:8px;transition:width 0.8s ease}
+        .progress-labels{display:flex;justify-content:space-between;font-size:11px;color:#6666aa;letter-spacing:0.5px}
+        .progress-labels .percent{color:#3b82f6;font-weight:600}
+        .status-message{margin-top:20px;padding:14px;border-radius:12px;background:#0d0d2a;border:1px solid #1a1a3e;font-size:13px;color:#aaaacc;min-height:50px;display:flex;align-items:center;justify-content:center;gap:10px}
+        .status-message .spinner{width:18px;height:18px;border:2px solid #1a1a3e;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite}
+        .btn{display:inline-block;padding:14px 32px;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.3s ease;text-decoration:none;width:100%;text-align:center}
+        .btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff}
+        .btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(59,130,246,0.3)}
+        .btn-success{background:linear-gradient(135deg,#00ffa3,#00cc88);color:#000}
+        .btn-success:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(0,255,163,0.3)}
+        .btn-danger{background:linear-gradient(135deg,#ff4d4d,#cc0000);color:#fff}
+        .btn-danger:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(255,77,77,0.3)}
+        .btn-secondary{background:#1a1a3e;color:#fff}
+        .btn-secondary:hover{background:#2a2a5e}
+        .btn-group{display:flex;gap:10px;margin-top:16px}
+        .btn-group .btn{flex:1}
+        .result-icon{font-size:72px;margin-bottom:16px}
+        .result-title{font-size:24px;font-weight:700;margin-bottom:8px}
+        .result-title.success{color:#00ffa3}
+        .result-title.failed{color:#ff4d4d}
+        .result-title.info{color:#3b82f6}
+        .result-desc{font-size:14px;color:#8888aa;margin-bottom:24px;line-height:1.6}
+        .result-details{background:#0d0d2a;border-radius:12px;padding:16px;margin-bottom:20px;text-align:left;border:1px solid #1a1a3e}
+        .result-details .row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #0a0a1a}
+        .result-details .row:last-child{border-bottom:none}
+        .result-details .label{color:#6666aa}
+        .result-details .value{color:#fff;font-weight:500}
+        .result-details .value.error-text{color:#ff6b6b}
+        .result-details .value.success-text{color:#00ffa3}
+        .hidden{display:none !important}
+        .webhook-status{font-size:11px;color:#555577;margin-top:12px;padding:8px;background:#0a0a1a;border-radius:8px;border:1px solid #1a1a3e}
+        .webhook-status .sent{color:#00ffa3}
+        .webhook-status .failed{color:#ff4d4d}
+        .param-list{background:#0d0d2a;border-radius:12px;padding:12px;margin-bottom:16px;text-align:left;border:1px solid #1a1a3e}
+        .param-item{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;border-bottom:1px solid #0a0a1a}
+        .param-item:last-child{border-bottom:none}
+        .param-item .pname{color:#8888aa}
+        .param-item .pvalue{font-weight:500;word-break:break-all;max-width:60%;text-align:right}
+        .param-item .pvalue.present{color:#00ffa3}
+        .param-item .pvalue.missing{color:#ff6b6b}
+        .param-item .pvalue.corrupt{color:#ffaa00}
+        .param-status-icon{font-size:16px;margin-left:8px}
+        @media(max-width:480px){.container{padding:20px 16px}.scanner{width:130px;height:130px}.scanner-icon{inset:24px;font-size:36px}.scanner-icon img{width:40px;height:40px}.content h1{font-size:19px}}
+    </style>
+</head>
+<body>
+
+<div class="container" id="app">
+    <!-- Header -->
+    <div class="header">
+        <div class="avatar" id="avatar"><span id="avatarText">U</span></div>
+        <div class="user-info">
+            <div class="name" id="userName">User</div>
+            <div class="id" id="userId">ID: Loading...</div>
+        </div>
+        <div class="status-badge" id="statusBadge">
+            <span class="dot"></span>
+            <span id="statusText">SCANNING</span>
+        </div>
+    </div>
+
+    <!-- Page: Error -->
+    <div id="pageError" class="hidden">
+        <div class="content">
+            <div class="error-icon">🚫</div>
+            <h1 class="error-title">Parameter Validation Failed</h1>
+            <p class="error-desc" id="errorMessage">One or more required parameters are missing or invalid.</p>
+            <div class="param-list" id="paramCheckList">
+                <div class="param-item"><span class="pname">🔑 botHash</span><span class="pvalue" id="checkBotHash">Checking...</span></div>
+                <div class="param-item"><span class="pname">🤖 bot</span><span class="pvalue" id="checkBot">Checking...</span></div>
+                <div class="param-item"><span class="pname">📦 tgWebAppData</span><span class="pvalue" id="checkTgData">Checking...</span></div>
+                <div class="param-item"><span class="pname">👤 user (in tgWebAppData)</span><span class="pvalue" id="checkUser">Checking...</span></div>
+                <div class="param-item"><span class="pname">🔐 query_id</span><span class="pvalue" id="checkQueryId">Checking...</span></div>
+                <div class="param-item"><span class="pname">⏰ auth_date</span><span class="pvalue" id="checkAuthDate">Checking...</span></div>
+            </div>
+            <div class="error-details">
+                <div class="row"><span class="label">Error Type</span><span class="value" id="errorType" style="color:#ff6b6b;">-</span></div>
+                <div class="row"><span class="label">Missing Parameters</span><span class="value" id="missingParams" style="color:#ffaa00;">-</span></div>
+                <div class="row"><span class="label">Status</span><span class="value" style="color:#ff6b6b;">❌ Validation Failed</span></div>
+            </div>
+            <div class="webhook-status" id="webhookErrorStatus">📡 Webhook: <span class="failed">Not Sent</span></div>
+            <button class="btn btn-danger" onclick="closeApp()">CLOSE</button>
+            <button class="btn btn-secondary" style="margin-top:10px;" onclick="retryVerification()">RETRY</button>
+        </div>
+    </div>
+
+    <!-- Page: Scanner -->
+    <div id="pageScanner">
+        <div class="scanner-section"><div class="scanner"><div class="ring-outer"></div><div class="ring-inner"></div><div class="scanner-icon"><img src="https://i.ibb.co/20z9rTwJ/20260227-005438.png" alt="scan"></div><div class="scan-line"></div></div></div>
+        <div class="content">
+            <h1>Verifying Device</h1>
+            <p class="subtitle" id="statusMessage">Establishing secure handshake...</p>
+            <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+            <div class="progress-labels"><span>ANALYSIS IN PROGRESS</span><span class="percent" id="percentText">10%</span></div>
+            <div class="status-message" id="statusDetail"><span class="spinner"></span><span>Connecting to secure server...</span></div>
+        </div>
+    </div>
+
+    <!-- Page: Success -->
+    <div id="pageSuccess" class="hidden">
+        <div class="content">
+            <div class="result-icon">✅</div>
+            <h1 class="result-title success">Verified Successfully</h1>
+            <p class="result-desc">Your device has been verified. You can now use the bot.</p>
+            <div class="result-details">
+                <div class="row"><span class="label">User ID</span><span class="value" id="successUserId">-</span></div>
+                <div class="row"><span class="label">Device</span><span class="value" id="successDevice">-</span></div>
+                <div class="row"><span class="label">Browser</span><span class="value" id="successBrowser">-</span></div>
+                <div class="row"><span class="label">Verified At</span><span class="value" id="successTime">-</span></div>
+                <div class="row"><span class="label">Webhook Status</span><span class="value success-text" id="successWebhook">✅ Sent</span></div>
+            </div>
+            <div class="webhook-status" id="webhookSuccessStatus">📡 Webhook: <span class="sent">✅ Success Response Sent</span></div>
+            <button class="btn btn-success" onclick="closeApp()">CONTINUE TO BOT</button>
+        </div>
+    </div>
+
+    <!-- Page: Failed -->
+    <div id="pageFailed" class="hidden">
+        <div class="content">
+            <div class="result-icon">❌</div>
+            <h1 class="result-title failed">Verification Failed</h1>
+            <p class="result-desc" id="failMessage">Something went wrong. Please try again.</p>
+            <div class="result-details">
+                <div class="row"><span class="label">Error Code</span><span class="value error-text" id="failCode">-</span></div>
+                <div class="row"><span class="label">Reason</span><span class="value error-text" id="failReason">-</span></div>
+                <div class="row"><span class="label">Webhook Status</span><span class="value error-text" id="failWebhook">❌ Error Response Sent</span></div>
+            </div>
+            <div class="webhook-status" id="webhookFailStatus">📡 Webhook: <span class="failed">❌ Error Response Sent</span></div>
+            <button class="btn btn-danger" onclick="retryVerification()">RETRY</button>
+            <button class="btn btn-secondary" style="margin-top:10px;" onclick="closeApp()">CONTINUE TO BOT</button>
+        </div>
+    </div>
+
+    <!-- Page: Already Verified -->
+    <div id="pageAlready" class="hidden">
+        <div class="content">
+            <div class="result-icon">ℹ️</div>
+            <h1 class="result-title info">Already Verified</h1>
+            <p class="result-desc">You are already verified. You can continue to the bot.</p>
+            <div class="result-details">
+                <div class="row"><span class="label">User ID</span><span class="value" id="alreadyUserId">-</span></div>
+                <div class="row"><span class="label">Status</span><span class="value success-text">Verified ✓</span></div>
+                <div class="row"><span class="label">Webhook Status</span><span class="value success-text" id="alreadyWebhook">✅ Info Response Sent</span></div>
+            </div>
+            <div class="webhook-status" id="webhookAlreadyStatus">📡 Webhook: <span class="sent">✅ Info Response Sent</span></div>
+            <button class="btn btn-primary" onclick="closeApp()">CONTINUE TO BOT</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+const PARAM_CONFIG = [
+    { key: 'botHash', label: 'botHash', type: 'query', required: true },
+    { key: 'bot', label: 'bot', type: 'query', required: true },
+    { key: 'tgWebAppData', label: 'tgWebAppData', type: 'hash', required: true },
+    { key: 'user', label: 'user (in tgWebAppData)', type: 'nested', required: true, parent: 'tgWebAppData' },
+    { key: 'query_id', label: 'query_id', type: 'nested', required: true, parent: 'tgWebAppData' },
+    { key: 'auth_date', label: 'auth_date', type: 'nested', required: true, parent: 'tgWebAppData' }
+];
+
+// ============================================================
+// GET URL PARAMETERS
+// ============================================================
+
+function getUrlParams() {
+    const params = {};
+    const url = window.location.href;
+    
+    const hashMatch = url.match(/#tgWebAppData=([^&]*)/);
+    if (hashMatch) params.tgWebAppData = decodeURIComponent(hashMatch[1]);
+    
+    const botHashMatch = url.match(/[?&]botHash=([^&]*)/);
+    if (botHashMatch) params.botHash = botHashMatch[1];
+    
+    const botMatch = url.match(/[?&]bot=([^&]*)/);
+    if (botMatch) params.bot = botMatch[1];
+    
+    if (params.tgWebAppData) {
+        try {
+            const dataParams = new URLSearchParams(params.tgWebAppData);
+            params.query_id = dataParams.get('query_id') || '';
+            params.user_raw = dataParams.get('user') || '';
+            params.auth_date = dataParams.get('auth_date') || '';
+            params.signature = dataParams.get('signature') || '';
+            params.hash = dataParams.get('hash') || '';
+            
+            if (params.user_raw) {
+                try {
+                    params.user = JSON.parse(decodeURIComponent(params.user_raw));
+                } catch (e) {
+                    params.user = null;
+                    params.user_parse_error = true;
+                }
+            }
+        } catch (e) {
+            console.error('Error parsing tgWebAppData:', e);
+        }
+    }
+    
+    return params;
+}
+
+const urlParams = getUrlParams();
+console.log('📊 URL Params:', urlParams);
+
+// ============================================================
+// VALIDATE ALL PARAMETERS
+// ============================================================
+
+function validateAllParams(params) {
+    const results = {};
+    const missing = [];
+    const corrupt = [];
+    
+    for (const config of PARAM_CONFIG) {
+        let value = null;
+        let status = 'missing';
+        let displayValue = '';
+        
+        if (config.type === 'query') {
+            value = params[config.key] || '';
+            displayValue = value || '(empty)';
+            if (value && value.length > 30) displayValue = value.substring(0, 30) + '...';
+        } else if (config.type === 'hash') {
+            value = params[config.key] || '';
+            displayValue = value || '(empty)';
+            if (value && value.length > 30) displayValue = value.substring(0, 30) + '...';
+        } else if (config.type === 'nested') {
+            if (config.key === 'user') {
+                if (params.user && typeof params.user === 'object') {
+                    value = JSON.stringify(params.user);
+                    displayValue = '✅ Valid User Object';
+                    status = 'present';
+                } else if (params.user_parse_error) {
+                    value = 'invalid';
+                    displayValue = '❌ Invalid JSON';
+                    status = 'corrupt';
+                } else {
+                    value = '';
+                    displayValue = '(missing)';
+                    status = 'missing';
+                }
+            } else {
+                value = params[config.key] || '';
+                displayValue = value || '(empty)';
+                if (value && value.length > 30) displayValue = value.substring(0, 30) + '...';
+            }
+        }
+        
+        if (config.required) {
+            if (!value || value === '') {
+                status = 'missing';
+                missing.push(config.label);
+            } else if (config.key === 'user' && params.user_parse_error) {
+                status = 'corrupt';
+                corrupt.push(config.label);
+            } else {
+                status = 'present';
+            }
+        }
+        
+        results[config.key] = {
+            label: config.label,
+            value: value,
+            displayValue: displayValue,
+            status: status,
+            required: config.required
+        };
+    }
+    
+    const isValid = missing.length === 0 && corrupt.length === 0;
+    
+    return {
+        isValid: isValid,
+        results: results,
+        missing: missing,
+        corrupt: corrupt,
+        totalChecked: PARAM_CONFIG.length,
+        passed: Object.values(results).filter(r => r.status === 'present').length,
+        failed: Object.values(results).filter(r => r.status === 'missing' || r.status === 'corrupt').length
+    };
+}
+
+// ============================================================
+// DISPLAY FUNCTIONS
+// ============================================================
+
+function displayParamResults(validation) {
+    const results = validation.results;
+    const checkMap = {
+        'botHash': 'checkBotHash',
+        'bot': 'checkBot',
+        'tgWebAppData': 'checkTgData',
+        'user': 'checkUser',
+        'query_id': 'checkQueryId',
+        'auth_date': 'checkAuthDate'
+    };
+    
+    for (const [key, elId] of Object.entries(checkMap)) {
+        const el = document.getElementById(elId);
+        if (!el) continue;
+        const result = results[key];
+        if (!result) { el.textContent = '⚠️ Not Checked'; el.className = 'pvalue corrupt'; continue; }
+        let icon = '', statusText = '', className = '';
+        if (result.status === 'present') { icon = '✅'; statusText = result.displayValue; className = 'present'; }
+        else if (result.status === 'missing') { icon = '❌'; statusText = 'Missing'; className = 'missing'; }
+        else if (result.status === 'corrupt') { icon = '⚠️'; statusText = 'Corrupt'; className = 'corrupt'; }
+        el.textContent = `${icon} ${statusText}`;
+        el.className = `pvalue ${className}`;
+    }
+}
+
+function showErrorPage(validation) {
+    showPage('pageError');
+    document.getElementById('statusText').textContent = 'ERROR';
+    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
+    document.getElementById('statusBadge').style.color = '#ff4d4d';
+    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
+    displayParamResults(validation);
+    let errorType = '', message = '';
+    if (validation.missing.length > 0 && validation.corrupt.length > 0) {
+        errorType = 'MISSING_AND_CORRUPT';
+        message = `Missing: ${validation.missing.join(', ')} | Corrupt: ${validation.corrupt.join(', ')}`;
+    } else if (validation.missing.length > 0) {
+        errorType = 'MISSING_PARAMETERS';
+        message = `Missing required parameters: ${validation.missing.join(', ')}`;
+    } else if (validation.corrupt.length > 0) {
+        errorType = 'CORRUPT_PARAMETERS';
+        message = `Corrupt parameters: ${validation.corrupt.join(', ')}`;
+    } else {
+        errorType = 'UNKNOWN_ERROR';
+        message = 'Unknown parameter validation error';
+    }
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorType').textContent = errorType;
+    document.getElementById('missingParams').textContent = validation.missing.length > 0 ? validation.missing.join(', ') : 'None';
+    document.getElementById('webhookErrorStatus').innerHTML = '📡 Webhook: <span class="failed">❌ Not Sent (Validation Failed)</span>';
+    sendWebhookResponse('unknown', 'error', 'Parameter Validation Failed', message, errorType, null);
+}
+
+function showPage(pageId) {
+    document.querySelectorAll('[id^="page"]').forEach(el => el.classList.add('hidden'));
+    const page = document.getElementById(pageId);
+    if (page) page.classList.remove('hidden');
+}
+
+function updateStatus(text, badgeText) {
+    const statusMsg = document.getElementById('statusMessage');
+    if (statusMsg) statusMsg.textContent = text;
+    if (badgeText) document.getElementById('statusText').textContent = badgeText;
+}
+
+function updateProgress(value) {
+    const bar = document.getElementById('progressBar');
+    const percent = document.getElementById('percentText');
+    if (bar) bar.style.width = value + '%';
+    if (percent) percent.textContent = value + '%';
+}
+
+// ============================================================
+// WEBHOOK FUNCTIONS
+// ============================================================
+
+async function sendWebhookResponse(userId, status, title, message, errorType = null, deviceInfo = null) {
+    try {
+        const webhookData = {
+            userId: userId,
+            status: status,
+            title: title,
+            message: message,
+            timestamp: new Date().toISOString()
+        };
+        if (errorType) webhookData.errorType = errorType;
+        if (deviceInfo) webhookData.deviceInfo = deviceInfo;
+        console.log('📡 Sending Webhook:', webhookData);
+        const response = await fetch('/api/webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookData)
+        });
+        const result = await response.json();
+        console.log('📡 Webhook Response:', result);
+        return result;
+    } catch (error) {
+        console.error('Webhook error:', error);
+        return { success: false, error: 'WEBHOOK_FAILED' };
+    }
+}
+
+// ============================================================
+// USER DATA
+// ============================================================
+
+let user = null;
+
+function parseUserData() {
+    if (tg.initDataUnsafe?.user) {
+        user = tg.initDataUnsafe.user;
+        return true;
+    }
+    if (urlParams.tgWebAppData && urlParams.user) {
+        user = urlParams.user;
+        return true;
+    }
+    return false;
+}
+
+function displayUserInfo() {
+    if (user) {
+        const fullName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+        document.getElementById('userName').textContent = fullName || 'User';
+        document.getElementById('userId').textContent = 'ID: ' + (user.id || 'Unknown');
+        document.getElementById('avatarText').textContent = user.first_name ? user.first_name.charAt(0).toUpperCase() : 'U';
+        if (user.photo_url) {
+            const avatar = document.getElementById('avatar');
+            avatar.innerHTML = `<img src="${user.photo_url}" alt="avatar">`;
+        }
+    }
+}
+
+function getDeviceInfo() {
+    return {
+        browser: navigator.userAgent.split(' ').pop() || 'Unknown',
+        os: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
+        platform: navigator.platform || 'Unknown',
+        userAgent: navigator.userAgent
+    };
+}
+
+// ============================================================
+// TOKEN MANAGER
+// ============================================================
+
+class TokenManager {
+    constructor() { this.token = localStorage.getItem('jwtToken'); }
+    setToken(token) { this.token = token; localStorage.setItem('jwtToken', token); }
+    getAuthHeader() { return this.token ? `Bearer ${this.token}` : null; }
+    clearToken() { this.token = null; localStorage.removeItem('jwtToken'); }
+    isTokenValid() {
+        if (!this.token) return false;
+        try {
+            const payload = JSON.parse(atob(this.token.split('.')[1]));
+            return payload.exp > Math.floor(Date.now() / 1000);
+        } catch { return false; }
+    }
+}
+
+const tokenManager = new TokenManager();
+
+// ============================================================
+// API FUNCTIONS
+// ============================================================
+
+async function initVerification(initData, botHash, bot) {
+    try {
+        const response = await fetch('/api/init-verification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, botHash, bot })
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Init error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function checkStatus(sessionId) {
+    try {
+        const response = await fetch('/api/check-status/' + sessionId, {
+            headers: { 'Authorization': tokenManager.getAuthHeader() }
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Status error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function completeVerification(sessionId) {
+    try {
+        const response = await fetch('/api/complete-verification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': tokenManager.getAuthHeader()
+            },
+            body: JSON.stringify({ userId: user?.id, verified: true })
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Complete error:', error);
+        return { success: false, error: 'NETWORK_ERROR' };
+    }
+}
+
+async function checkExistingVerification() {
+    if (!tokenManager.isTokenValid()) {
+        tokenManager.clearToken();
+        return false;
+    }
+    try {
+        const response = await fetch('/api/user-profile', {
+            headers: { 'Authorization': tokenManager.getAuthHeader() }
+        });
+        const data = await response.json();
+        return data.success && data.isVerified;
+    } catch {
+        return false;
+    }
+}
+
+// ============================================================
+// SCANNER PROGRESS
+// ============================================================
+
+const steps = [
+    { value: 10, text: 'Establishing secure handshake...', detail: 'Connecting to secure server...' },
+    { value: 30, text: 'Analyzing device integrity...', detail: 'Checking device fingerprints...' },
+    { value: 55, text: 'Verifying security parameters...', detail: 'Running security checks...' },
+    { value: 80, text: 'Finalizing verification...', detail: 'Almost done...' },
+    { value: 100, text: 'Verification Complete!', detail: '✅ Verified successfully!' }
+];
+
+let stepIndex = 0;
+let progressInterval = null;
+
+function startProgress() {
+    stepIndex = 0;
+    updateProgress(10);
+    updateStatus('Establishing secure handshake...', 'SCANNING');
+    document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>Connecting to secure server...</span>';
+    progressInterval = setInterval(() => {
+        stepIndex++;
+        if (stepIndex < steps.length) {
+            const step = steps[stepIndex];
+            updateProgress(step.value);
+            updateStatus(step.text, 'SCANNING');
+            document.getElementById('statusDetail').innerHTML = '<span class="spinner"></span><span>' + step.detail + '</span>';
+        } else {
+            clearInterval(progressInterval);
+            setTimeout(() => { showSuccessPage(); }, 800);
+        }
+    }, 1800);
+}
+
+// ============================================================
+// RESULT PAGES
+// ============================================================
+
+async function showSuccessPage() {
+    showPage('pageSuccess');
+    document.getElementById('statusText').textContent = 'VERIFIED';
+    document.getElementById('statusBadge').style.borderColor = '#00ffa3';
+    document.getElementById('statusBadge').style.color = '#00ffa3';
+    document.getElementById('statusBadge').style.background = 'rgba(0,255,163,0.1)';
+    const deviceInfo = getDeviceInfo();
+    if (user) {
+        document.getElementById('successUserId').textContent = user.id || '-';
+        document.getElementById('successDevice').textContent = deviceInfo.os || '-';
+        document.getElementById('successBrowser').textContent = deviceInfo.browser || '-';
+        document.getElementById('successTime').textContent = new Date().toLocaleTimeString();
+    }
+    const webhookResult = await sendWebhookResponse(
+        user?.id || 'unknown', 'success', 'Verification Complete',
+        'Device verified successfully!', null, deviceInfo
+    );
+    if (webhookResult.success) {
+        document.getElementById('successWebhook').textContent = '✅ Sent';
+        document.getElementById('webhookSuccessStatus').innerHTML = '📡 Webhook: <span class="sent">✅ Success Response Sent</span>';
+    } else {
+        document.getElementById('successWebhook').textContent = '⚠️ Failed';
+        document.getElementById('webhookSuccessStatus').innerHTML = '📡 Webhook: <span class="failed">⚠️ Failed to Send</span>';
+    }
+}
+
+async function showFailedPage(errorCode, message) {
+    showPage('pageFailed');
+    document.getElementById('statusText').textContent = 'FAILED';
+    document.getElementById('statusBadge').style.borderColor = '#ff4d4d';
+    document.getElementById('statusBadge').style.color = '#ff4d4d';
+    document.getElementById('statusBadge').style.background = 'rgba(255,77,77,0.1)';
+    document.getElementById('failMessage').textContent = message || 'Something went wrong. Please try again.';
+    document.getElementById('failCode').textContent = errorCode || 'UNKNOWN';
+    const reasons = {
+        'VPN_USAGE_DETECTED': 'VPN detected. Please disable VPN and try again.',
+        'DIFFERENT_BROWSER_DETECTED': 'Different browser detected. Use the same browser.',
+        'DIFFERENT_USER_SAME_DEVICE': 'Different user on same device.',
+        'SAME_DEVICE_DIFFERENT_BROWSER': 'Different browser on same device.',
+        'INVALID_HASH': 'Security verification failed.',
+        'RATE_LIMIT_EXCEEDED': 'Too many attempts. Please wait.',
+        'SESSION_EXPIRED': 'Session expired. Please start again.',
+        'INVALID_USER_DATA': 'Invalid user data.',
+        'MISSING_INIT_DATA': 'Missing verification data.',
+        'NETWORK_ERROR': 'Network error. Please check your connection.'
+    };
+    document.getElementById('failReason').textContent = reasons[errorCode] || 'Unknown error occurred.';
+    const deviceInfo = getDeviceInfo();
+    const webhookResult = await sendWebhookResponse(
+        user?.id || 'unknown', 'error', 'Verification Failed',
+        message || 'Verification process failed', errorCode, deviceInfo
+    );
+    if (webhookResult.success) {
+        document.getElementById('failWebhook').textContent = '✅ Error Response Sent';
+        document.getElementById('webhookFailStatus').innerHTML = '📡 Webhook: <span class="sent">✅ Error Response Sent</span>';
+    } else {
+        document.getElementById('failWebhook').textContent = '⚠️ Failed to Send';
+        document.getElementById('webhookFailStatus').innerHTML = '📡 Webhook: <span class="failed">⚠️ Failed to Send</span>';
+    }
+}
+
+async function showAlreadyVerifiedPage() {
+    showPage('pageAlready');
+    document.getElementById('statusText').textContent = 'ACTIVE';
+    document.getElementById('statusBadge').style.borderColor = '#3b82f6';
+    document.getElementById('statusBadge').style.color = '#3b82f6';
+    document.getElementById('statusBadge').style.background = 'rgba(59,130,246,0.1)';
+    if (user) document.getElementById('alreadyUserId').textContent = user.id || '-';
+    const deviceInfo = getDeviceInfo();
+    const webhookResult = await sendWebhookResponse(
+        user?.id || 'unknown', 'info', 'Already Verified',
+        'User is already verified in the system', null, deviceInfo
+    );
+    if (webhookResult.success) {
+        document.getElementById('alreadyWebhook').textContent = '✅ Sent';
+        document.getElementById('webhookAlreadyStatus').innerHTML = '📡 Webhook: <span class="sent">✅ Info Response Sent</span>';
+    } else {
+        document.getElementById('alreadyWebhook').textContent = '⚠️ Failed';
+        document.getElementById('webhookAlreadyStatus').innerHTML = '📡 Webhook: <span class="failed">⚠️ Failed to Send</span>';
+    }
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+
+function closeApp() {
+    if (typeof tg !== 'undefined' && tg.close) tg.close();
+    else window.close();
+}
+
+function retryVerification() { window.location.reload(); }
+
+// ============================================================
+// MAIN INITIALIZATION
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+    const validation = validateAllParams(urlParams);
+    console.log('📋 Validation Results:', validation);
+    if (!validation.isValid) { showErrorPage(validation); return; }
+    const userParsed = parseUserData();
+    if (!userParsed || !user) {
+        const userValidation = { isValid: false, missing: ['User data could not be parsed'], corrupt: [], results: validation.results };
+        showErrorPage(userValidation); return;
+    }
+    displayUserInfo();
+    const isVerified = await checkExistingVerification();
+    if (isVerified) { await showAlreadyVerifiedPage(); return; }
+    const result = await initVerification(urlParams.tgWebAppData, urlParams.botHash || null, urlParams.bot || null);
+    if (!result.success) { await showFailedPage(result.error, result.message || 'Verification initialization failed.'); return; }
+    if (result.status === 'already_verified') {
+        if (result.token) tokenManager.setToken(result.token);
+        await showAlreadyVerifiedPage(); return;
+    }
+    if (result.status === 'pending' && result.sessionId) {
+        if (result.token) tokenManager.setToken(result.token);
+        startProgress();
+        const interval = setInterval(async () => {
+            const status = await checkStatus(result.sessionId);
+            if (status.success && status.status === 'verified') {
+                clearInterval(interval);
+                await completeVerification(result.sessionId);
+            } else if (status.status === 'failed') {
+                clearInterval(interval);
+                await showFailedPage('VERIFICATION_FAILED', 'Verification process failed.');
+            }
+        }, 2000);
+    } else {
+        await showFailedPage('UNKNOWN', 'Unexpected response from server.');
+    }
+});
+
+console.log('✅ Verification App Loaded');
+console.log('👤 User:', user);
+console.log('🔗 URL Params:', urlParams);
+</script>
+</body>
+</html>
