@@ -122,6 +122,9 @@ app.post('/api/init-verification', async function(req, res) {
         
         console.log('User ' + userIdStr + ' verified status: ' + isVerified);
         
+        // =============================================
+        // ✅ CHECK: If user is already verified
+        // =============================================
         if (isVerified) {
             console.log('User already verified, sending info response');
             
@@ -144,6 +147,9 @@ app.post('/api/init-verification', async function(req, res) {
             });
         }
         
+        // =============================================
+        // ✅ NEW USER - Create session
+        // =============================================
         var sessionId = crypto.randomBytes(32).toString('hex');
         
         userSessions.set(sessionId, {
